@@ -7,6 +7,8 @@ internal static class NativeMethods
 {
     internal const int GWL_EXSTYLE = -20;
     internal const int WM_HOTKEY = 0x0312;
+    internal const int WM_NCHITTEST = 0x0084;
+    internal const int HTTRANSPARENT = -1;
 
     internal const uint WS_EX_TRANSPARENT = 0x00000020;
     internal const uint WS_EX_LAYERED = 0x00080000;

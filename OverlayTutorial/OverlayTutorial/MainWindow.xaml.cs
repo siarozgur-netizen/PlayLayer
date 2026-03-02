@@ -34,11 +34,12 @@ public partial class MainWindow : Window
     private const double MaxOpacity = 1.00;
     private const double OpacityStep = 0.10;
     private const double DefaultOpacity = 1.00;
+    private const string DefaultHomeUrl = "https://www.youtube.com/";
     private const string YouTubeSearchUrlPrefix = "https://www.youtube.com/results?search_query=";
     private const int LayoutAnimationMilliseconds = 160;
     private const int IndicatorVisibleMilliseconds = 1200;
     private const int HotkeyHintVisibleMilliseconds = 3000;
-    private static readonly bool EnableAudioFeedback = true;
+    private static readonly bool EnableAudioFeedback = false;
 
     private readonly OverlayLayoutService _overlayLayoutService = new();
     private readonly ConfigService _configService = new();
@@ -49,7 +50,7 @@ public partial class MainWindow : Window
     private bool _isInteractMode;
     private bool _isWebViewInitialized;
     private double _currentOpacity = DefaultOpacity;
-    private OverlayLayoutMode _layoutMode = OverlayLayoutMode.Search;
+    private OverlayLayoutMode _layoutMode = OverlayLayoutMode.Normal;
     private readonly DispatcherTimer _indicatorHideTimer = new();
     private readonly DispatcherTimer _hotkeyHintHideTimer = new();
 
@@ -93,7 +94,7 @@ public partial class MainWindow : Window
         _currentOpacity = NormalizeOpacity(_overlayConfig.Opacity);
         _overlayConfig.Opacity = _currentOpacity;
         ApplyOpacity(_currentOpacity, persist: false);
-        _layoutMode = OverlayLayoutMode.Search;
+        _layoutMode = OverlayLayoutMode.Normal;
 
         RegisterGlobalHotkeys();
         SetInteractMode(_layoutMode == OverlayLayoutMode.Search, showIndicator: false);
@@ -169,7 +170,14 @@ public partial class MainWindow : Window
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         _ = hwnd;
+        _ = wParam;
         _ = lParam;
+
+        if (msg == NativeMethods.WM_NCHITTEST && !_isInteractMode)
+        {
+            handled = true;
+            return new IntPtr(NativeMethods.HTTRANSPARENT);
+        }
 
         if (msg == NativeMethods.WM_HOTKEY && _globalHotkeyService?.HandleHotkey(wParam) == true)
         {
@@ -211,7 +219,7 @@ public partial class MainWindow : Window
 
         ApplyLayoutMode(OverlayLayoutMode.Search, animate: true, showIndicator: true);
         NavigateToSearchHome();
-        FocusSearchBar();
+        FocusSearchBarWithActivation();
         ShowHotkeyFeedback("SEARCH MODE");
         PlayFeedbackTone();
     }
@@ -356,7 +364,7 @@ public partial class MainWindow : Window
     private static string GetStartupUrl(string? lastUrl)
     {
         _ = lastUrl;
-        return $"{YouTubeSearchUrlPrefix}";
+        return DefaultHomeUrl;
     }
 
     private static string GetWebViewUserDataFolder()
@@ -374,6 +382,23 @@ public partial class MainWindow : Window
 
         SearchTextBox.Focus();
         SearchTextBox.SelectAll();
+    }
+
+    private async void FocusSearchBarWithActivation()
+    {
+        if (_layoutMode != OverlayLayoutMode.Search || !_isInteractMode || !IsVisible)
+        {
+            return;
+        }
+
+        Activate();
+        await Dispatcher.InvokeAsync(
+            () =>
+            {
+                SearchTextBox.Focus();
+                SearchTextBox.SelectAll();
+            },
+            DispatcherPriority.Input);
     }
 
     private void UpdateSearchInputAvailability()
@@ -489,7 +514,7 @@ public partial class MainWindow : Window
         else
         {
             SetInteractMode(true, showIndicator);
-            FocusSearchBar();
+            FocusSearchBarWithActivation();
         }
     }
 
@@ -537,7 +562,7 @@ public partial class MainWindow : Window
 
     private OverlayLayoutMode GetInitialLayoutMode()
     {
-        return OverlayLayoutMode.Search;
+        return OverlayLayoutMode.Normal;
     }
 
     private void ShowModeIndicatorTemporarily()

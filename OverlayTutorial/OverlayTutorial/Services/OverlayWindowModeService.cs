@@ -18,7 +18,7 @@ public sealed class OverlayWindowModeService
 
         _ = NativeMethods.EnumChildWindows(
             _windowHandle,
-            (childHandle, _) =>
+            (childHandle, lParam) =>
             {
                 // Disabling child windows in PASS mode prevents WebView from receiving input
                 // without forcing fragile style changes that can cause black rendering.

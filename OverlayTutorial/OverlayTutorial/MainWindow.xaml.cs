@@ -52,6 +52,7 @@ public partial class MainWindow : Window
     private OverlayLayoutMode _layoutMode = OverlayLayoutMode.Normal;
     private readonly DispatcherTimer _indicatorHideTimer = new();
     private readonly DispatcherTimer _hotkeyHintHideTimer = new();
+    private bool _pendingAutoFullscreenForVideo;
 
     public MainWindow()
     {
@@ -363,6 +364,14 @@ public partial class MainWindow : Window
 
         _overlayConfig.LastUrl = OverlayWebView.Source.ToString();
         _configService.Save(_overlayConfig);
+
+        _ = ApplySearchModePageChromeAsync(_layoutMode == OverlayLayoutMode.Search);
+
+        if (_pendingAutoFullscreenForVideo && IsVideoUrl(OverlayWebView.Source.ToString()))
+        {
+            _pendingAutoFullscreenForVideo = false;
+            _ = TryAutoEnterFullscreenPlaybackAsync();
+        }
     }
 
     private void OnWebViewNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
@@ -390,7 +399,64 @@ public partial class MainWindow : Window
     {
         if (_layoutMode == OverlayLayoutMode.Search && IsVideoUrl(url))
         {
+            _pendingAutoFullscreenForVideo = true;
             Dispatcher.Invoke(() => ApplyLayoutMode(OverlayLayoutMode.Normal, animate: true, showIndicator: true));
+        }
+    }
+
+    private async Task TryAutoEnterFullscreenPlaybackAsync()
+    {
+        if (OverlayWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        const string fullscreenScript = """
+            (() => {
+              const video = document.querySelector('video');
+              if (!video) return false;
+
+              try {
+                if (video.paused) {
+                  const playResult = video.play();
+                  if (playResult && typeof playResult.catch === 'function') {
+                    playResult.catch(() => {});
+                  }
+                }
+              } catch {}
+
+              if (document.fullscreenElement) return true;
+
+              const fullscreenButton = document.querySelector('.ytp-fullscreen-button');
+              if (fullscreenButton) {
+                fullscreenButton.click();
+                return true;
+              }
+
+              if (typeof video.requestFullscreen === 'function') {
+                const fsResult = video.requestFullscreen();
+                if (fsResult && typeof fsResult.catch === 'function') {
+                  fsResult.catch(() => {});
+                }
+                return true;
+              }
+
+              return false;
+            })();
+            """;
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                _ = await OverlayWebView.CoreWebView2.ExecuteScriptAsync(fullscreenScript);
+            }
+            catch
+            {
+                // Ignore transient script execution failures while page is stabilizing.
+            }
+
+            await Task.Delay(220);
         }
     }
 
@@ -575,6 +641,8 @@ public partial class MainWindow : Window
             SetInteractMode(true, showIndicator);
             FocusSearchBarWithActivation();
         }
+
+        _ = ApplySearchModePageChromeAsync(isSearchMode);
     }
 
     private void AnimateWindowLayout(double targetLeft, double targetTop, double targetWidth, double targetHeight)
@@ -690,6 +758,53 @@ public partial class MainWindow : Window
         catch
         {
             // Ignore audio feedback issues.
+        }
+    }
+
+    private async Task ApplySearchModePageChromeAsync(bool isSearchMode)
+    {
+        if (OverlayWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        const string styleId = "overlay-search-mode-style";
+        var script = isSearchMode
+            ? $$"""
+            (() => {
+              const existing = document.getElementById('{{styleId}}');
+              if (existing) return;
+
+              const style = document.createElement('style');
+              style.id = '{{styleId}}';
+              style.textContent = `
+                ytd-masthead, #masthead-container, tp-yt-app-header-layout #masthead {
+                  display: none !important;
+                }
+                ytd-app, ytd-page-manager, #page-manager {
+                  margin-top: 0 !important;
+                  padding-top: 0 !important;
+                }
+              `;
+              document.documentElement.appendChild(style);
+            })();
+            """
+            : $$"""
+            (() => {
+              const existing = document.getElementById('{{styleId}}');
+              if (existing) {
+                existing.remove();
+              }
+            })();
+            """;
+
+        try
+        {
+            _ = await OverlayWebView.CoreWebView2.ExecuteScriptAsync(script);
+        }
+        catch
+        {
+            // Ignore transient script injection errors while page transitions.
         }
     }
 }

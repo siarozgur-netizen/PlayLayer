@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.IO;
-using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows.Media.Animation;
 using System.Windows;
@@ -626,7 +625,7 @@ public partial class MainWindow : Window
 
         try
         {
-            SystemSounds.Asterisk.Play();
+            _ = NativeMethods.MessageBeep(NativeMethods.MB_ICONASTERISK);
         }
         catch
         {

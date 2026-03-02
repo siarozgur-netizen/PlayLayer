@@ -15,6 +15,7 @@ internal static class NativeMethods
     internal const uint MOD_CONTROL = 0x0002;
     internal const uint VK_UP = 0x26;
     internal const uint VK_DOWN = 0x28;
+    internal const uint MB_ICONASTERISK = 0x00000040;
 
     internal static readonly IntPtr HWND_TOPMOST = new(-1);
 
@@ -40,6 +41,9 @@ internal static class NativeMethods
         int cx,
         int cy,
         uint uFlags);
+
+    [DllImport("user32.dll")]
+    internal static extern bool MessageBeep(uint uType);
 
     [DllImport("user32.dll")]
     internal static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);

@@ -12,17 +12,17 @@
         PreviewKeyDown="OnWindowPreviewKeyDown"
         PreviewKeyUp="OnWindowPreviewKeyUp">
     <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition x:Name="SearchRowDefinition" Height="36" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
         <Border BorderBrush="#24FFFFFF"
                 BorderThickness="1"
                 CornerRadius="6"
                 Margin="1"
                 IsHitTestVisible="False"
                 Panel.ZIndex="900" />
-
-        <Grid.RowDefinitions>
-            <RowDefinition x:Name="SearchRowDefinition" Height="36" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
 
         <Border x:Name="SearchBarContainer"
                 Grid.Row="0"

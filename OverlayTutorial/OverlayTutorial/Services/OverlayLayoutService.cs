@@ -4,7 +4,7 @@ namespace OverlayTutorial.Services;
 
 public sealed class OverlayLayoutService
 {
-    private const double NormalWidthRatio = 0.26;
+    private const double NormalWidthRatio = 0.30;
     private const double NormalAspectRatioWidth = 16.0;
     private const double NormalAspectRatioHeight = 9.0;
     private const double SearchWidthRatio = 0.24;

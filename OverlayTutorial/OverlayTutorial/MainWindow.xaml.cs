@@ -29,15 +29,23 @@ public partial class MainWindow : Window
     private const int ToggleSearchModeHotkeyId = 6;
     private const int ExitAppHotkeyId = 7;
     private const int TogglePlaybackHotkeyId = 8;
+    private const int IncreaseVolumeHotkeyId = 9;
+    private const int DecreaseVolumeHotkeyId = 10;
+    private const int SeekBackwardHotkeyId = 11;
+    private const int SeekForwardHotkeyId = 12;
+    private const int ToggleMuteHotkeyId = 13;
+    private const int NavigateHomeHotkeyId = 14;
 
     private const double MinOpacity = 0.40;
     private const double MaxOpacity = 1.00;
     private const double OpacityStep = 0.10;
     private const double DefaultOpacity = 1.00;
+    private const string YouTubeHomeUrl = "https://www.youtube.com";
     private const string YouTubeSearchUrlPrefix = "https://www.youtube.com/results?search_query=";
     private const int LayoutAnimationMilliseconds = 160;
     private const int IndicatorVisibleMilliseconds = 1200;
     private const int HotkeyHintVisibleMilliseconds = 3000;
+    private const double VolumeStep = 0.10;
     private static readonly bool EnableAudioFeedback = false;
 
     private readonly OverlayLayoutService _overlayLayoutService = new();
@@ -94,7 +102,7 @@ public partial class MainWindow : Window
         _currentOpacity = NormalizeOpacity(_overlayConfig.Opacity);
         _overlayConfig.Opacity = _currentOpacity;
         ApplyOpacity(_currentOpacity, persist: false);
-        _layoutMode = OverlayLayoutMode.Normal;
+        _layoutMode = GetInitialLayoutMode();
 
         RegisterGlobalHotkeys();
         SetInteractMode(_layoutMode == OverlayLayoutMode.Search, showIndicator: false);
@@ -169,6 +177,38 @@ public partial class MainWindow : Window
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to register Ctrl+Alt+P hotkey.");
         }
+
+        if (!_globalHotkeyService.Register(IncreaseVolumeHotkeyId, modifiers, NativeMethods.VK_RIGHT, IncreaseVolume))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to register Ctrl+Alt+Right hotkey.");
+        }
+
+        if (!_globalHotkeyService.Register(DecreaseVolumeHotkeyId, modifiers, NativeMethods.VK_LEFT, DecreaseVolume))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to register Ctrl+Alt+Left hotkey.");
+        }
+
+        if (!_globalHotkeyService.Register(SeekBackwardHotkeyId, modifiers, (uint)'K', SeekBackward) &&
+            !_globalHotkeyService.Register(SeekBackwardHotkeyId, modifiers, NativeMethods.VK_OEM_COMMA, SeekBackward))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to register Ctrl+Alt+K (or Ctrl+Alt+,) hotkey.");
+        }
+
+        if (!_globalHotkeyService.Register(SeekForwardHotkeyId, modifiers, (uint)'L', SeekForward) &&
+            !_globalHotkeyService.Register(SeekForwardHotkeyId, modifiers, NativeMethods.VK_OEM_PERIOD, SeekForward))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to register Ctrl+Alt+L (or Ctrl+Alt+.) hotkey.");
+        }
+
+        if (!_globalHotkeyService.Register(ToggleMuteHotkeyId, modifiers, (uint)'M', ToggleMute))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to register Ctrl+Alt+M hotkey.");
+        }
+
+        if (!_globalHotkeyService.Register(NavigateHomeHotkeyId, modifiers, (uint)'H', NavigateHome))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to register Ctrl+Alt+H hotkey.");
+        }
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -227,6 +267,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        _ = ExitWebContentFullscreenIfNeededAsync();
         ApplyLayoutMode(OverlayLayoutMode.Search, animate: true, showIndicator: true);
         NavigateToSearchHome();
         FocusSearchBarWithActivation();
@@ -261,6 +302,155 @@ public partial class MainWindow : Window
         {
             _ = await OverlayWebView.CoreWebView2.ExecuteScriptAsync(script);
             ShowHotkeyFeedback("PLAY/PAUSE");
+            PlayFeedbackTone();
+        }
+        catch
+        {
+            // Ignore script errors.
+        }
+    }
+
+    private void IncreaseVolume()
+    {
+        _ = AdjustVolumeAsync(VolumeStep);
+    }
+
+    private void DecreaseVolume()
+    {
+        _ = AdjustVolumeAsync(-VolumeStep);
+    }
+
+    private void ToggleMute()
+    {
+        _ = ToggleMuteAsync();
+    }
+
+    private async Task AdjustVolumeAsync(double delta)
+    {
+        if (OverlayWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var script = $$"""
+            (() => {
+              const video = document.querySelector('video');
+              if (!video) return null;
+
+              const nextVolume = Math.max(0, Math.min(1, (video.volume || 0) + ({{delta.ToString(System.Globalization.CultureInfo.InvariantCulture)}})));
+              video.volume = nextVolume;
+              if (nextVolume > 0 && video.muted) {
+                video.muted = false;
+              }
+
+              return Math.round(nextVolume * 100);
+            })();
+            """;
+
+        try
+        {
+            var result = await OverlayWebView.CoreWebView2.ExecuteScriptAsync(script);
+            if (string.Equals(result, "null", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var trimmed = result.Trim('\"');
+            if (int.TryParse(trimmed, out var percent))
+            {
+                ShowHotkeyFeedback($"VOLUME {percent}%");
+            }
+            else
+            {
+                ShowHotkeyFeedback("VOLUME");
+            }
+
+            PlayFeedbackTone();
+        }
+        catch
+        {
+            // Ignore script errors.
+        }
+    }
+
+    private async Task ToggleMuteAsync()
+    {
+        if (OverlayWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        const string script = """
+            (() => {
+              const video = document.querySelector('video');
+              if (!video) return null;
+              video.muted = !video.muted;
+              return video.muted ? "ON" : "OFF";
+            })();
+            """;
+
+        try
+        {
+            var result = await OverlayWebView.CoreWebView2.ExecuteScriptAsync(script);
+            if (string.Equals(result, "null", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var state = result.Trim('\"');
+            ShowHotkeyFeedback($"MUTE {state}");
+            PlayFeedbackTone();
+        }
+        catch
+        {
+            // Ignore script errors.
+        }
+    }
+
+    private void SeekBackward()
+    {
+        _ = SeekBySecondsAsync(-10);
+    }
+
+    private void SeekForward()
+    {
+        _ = SeekBySecondsAsync(10);
+    }
+
+    private void NavigateHome()
+    {
+        NavigateTo(YouTubeHomeUrl);
+        ShowHotkeyFeedback("HOME");
+        PlayFeedbackTone();
+    }
+
+    private async Task SeekBySecondsAsync(int seconds)
+    {
+        if (OverlayWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var script = $$"""
+            (() => {
+              const video = document.querySelector('video');
+              if (!video || !Number.isFinite(video.duration)) return false;
+              const nextTime = Math.max(0, Math.min(video.duration, video.currentTime + ({{seconds}})));
+              video.currentTime = nextTime;
+              return true;
+            })();
+            """;
+
+        try
+        {
+            var result = await OverlayWebView.CoreWebView2.ExecuteScriptAsync(script);
+            if (!string.Equals(result, "true", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var label = seconds > 0 ? "+10s" : "-10s";
+            ShowHotkeyFeedback($"SEEK {label}");
             PlayFeedbackTone();
         }
         catch
@@ -452,7 +642,11 @@ public partial class MainWindow : Window
 
     private static string GetStartupUrl(string? lastUrl)
     {
-        _ = lastUrl;
+        if (Uri.TryCreate(lastUrl, UriKind.Absolute, out var restored))
+        {
+            return restored.ToString();
+        }
+
         return YouTubeSearchUrlPrefix;
     }
 
@@ -613,6 +807,7 @@ public partial class MainWindow : Window
         if (animate)
         {
             AnimateWindowLayout(position.X, position.Y, size.Width, size.Height);
+            _ = EnsureFinalWindowBoundsAsync(position.X, position.Y, size.Width, size.Height);
         }
         else
         {
@@ -650,7 +845,7 @@ public partial class MainWindow : Window
     {
         return Enum.TryParse<OverlayLayoutMode>(modeValue, ignoreCase: true, out var parsedMode)
             ? parsedMode
-            : OverlayLayoutMode.Search;
+            : OverlayLayoutMode.Normal;
     }
 
     private static bool IsVideoUrl(string? url)
@@ -683,7 +878,7 @@ public partial class MainWindow : Window
 
     private OverlayLayoutMode GetInitialLayoutMode()
     {
-        return OverlayLayoutMode.Normal;
+        return OverlayLayoutMode.Search;
     }
 
     private void ShowModeIndicatorTemporarily()
@@ -751,6 +946,41 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task EnsureFinalWindowBoundsAsync(double targetLeft, double targetTop, double targetWidth, double targetHeight)
+    {
+        await Task.Delay(LayoutAnimationMilliseconds + 25);
+        Left = targetLeft;
+        Top = targetTop;
+        Width = targetWidth;
+        Height = targetHeight;
+    }
+
+    private async Task ExitWebContentFullscreenIfNeededAsync()
+    {
+        if (OverlayWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        const string exitFullscreenScript = """
+            (() => {
+              if (!document.fullscreenElement) return false;
+              const p = document.exitFullscreen();
+              if (p && typeof p.catch === 'function') p.catch(() => {});
+              return true;
+            })();
+            """;
+
+        try
+        {
+            _ = await OverlayWebView.CoreWebView2.ExecuteScriptAsync(exitFullscreenScript);
+        }
+        catch
+        {
+            // Ignore fullscreen exit failures.
+        }
+    }
+
     private async Task ApplySearchModePageChromeAsync()
     {
         if (OverlayWebView.CoreWebView2 is null)
@@ -775,6 +1005,12 @@ public partial class MainWindow : Window
                 ytd-app, ytd-page-manager, #page-manager {
                   margin-top: 0 !important;
                   padding-top: 0 !important;
+                  overflow-y: auto !important;
+                  overscroll-behavior: auto !important;
+                }
+                html, body, #content {
+                  overflow-y: auto !important;
+                  overscroll-behavior: auto !important;
                 }
               `;
               document.documentElement.appendChild(style);

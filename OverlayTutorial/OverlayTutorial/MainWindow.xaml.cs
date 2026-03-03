@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -13,6 +12,7 @@ using OverlayTutorial.Interop;
 using OverlayTutorial.Models;
 using OverlayTutorial.Services;
 using WinForms = System.Windows.Forms;
+using DrawingIcon = System.Drawing.Icon;
 
 namespace OverlayTutorial;
 
@@ -324,7 +324,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static Icon? LoadTrayIconFromResources()
+    private static DrawingIcon? LoadTrayIconFromResources()
     {
         var resource = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/overlay_icon.ico"));
         if (resource is null)
@@ -336,8 +336,8 @@ public partial class MainWindow : Window
         using var memory = new MemoryStream();
         source.CopyTo(memory);
         memory.Position = 0;
-        using var icon = new Icon(memory);
-        return (Icon)icon.Clone();
+        using var icon = new DrawingIcon(memory);
+        return (DrawingIcon)icon.Clone();
     }
 
     private void ToggleInteractMode()
@@ -986,7 +986,7 @@ public partial class MainWindow : Window
         UpdateSearchPlaceholderVisibility();
     }
 
-    private void OnSearchTextBoxKeyDown(object sender, KeyEventArgs e)
+    private void OnSearchTextBoxKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         _ = sender;
 
@@ -1000,7 +1000,7 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    private void OnWindowPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         _ = sender;
 

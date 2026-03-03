@@ -38,7 +38,15 @@ public sealed class GlobalHotkeyService : IDisposable
         var hotkeyId = wParam.ToInt32();
         if (_callbacks.TryGetValue(hotkeyId, out var callback))
         {
-            callback();
+            try
+            {
+                callback();
+            }
+            catch
+            {
+                // Never allow hotkey callback exceptions to crash the overlay loop.
+            }
+
             return true;
         }
 

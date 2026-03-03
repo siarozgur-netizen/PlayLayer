@@ -1,0 +1,32 @@
+<Window x:Class="OverlayTutorial.StartupFlashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PlayLayer"
+        Width="320"
+        Height="122"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Focusable="False"
+        ShowActivated="False">
+    <Border CornerRadius="14"
+            BorderBrush="#55FFFFFF"
+            BorderThickness="1"
+            Background="#D0101010"
+            Padding="16,12">
+        <StackPanel>
+            <TextBlock Text="PlayLayer"
+                       Foreground="White"
+                       FontSize="18"
+                       FontWeight="SemiBold" />
+            <TextBlock Text="READY"
+                       Margin="0,4,0,0"
+                       Foreground="#D9FFFFFF"
+                       FontSize="12" />
+        </StackPanel>
+    </Border>
+</Window>

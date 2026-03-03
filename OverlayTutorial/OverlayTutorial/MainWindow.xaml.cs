@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -11,6 +12,7 @@ using Microsoft.Web.WebView2.Core;
 using OverlayTutorial.Interop;
 using OverlayTutorial.Models;
 using OverlayTutorial.Services;
+using WinForms = System.Windows.Forms;
 
 namespace OverlayTutorial;
 
@@ -49,6 +51,7 @@ public partial class MainWindow : Window
     private const int IndicatorVisibleMilliseconds = 1200;
     private const int HotkeyHintVisibleMilliseconds = 5000;
     private const double VolumeStep = 0.10;
+    private const string AppDisplayName = "PlayLayer";
     private static readonly bool EnableAudioFeedback = false;
 
     private readonly OverlayLayoutService _overlayLayoutService = new();
@@ -66,6 +69,10 @@ public partial class MainWindow : Window
     private bool _pendingVideoUiOptimization;
     private int _layoutTransitionVersion;
     private bool _suspendAutoTheaterFromVideoUrl;
+    private CancellationTokenSource? _videoOptimizeCts;
+    private bool _isRecoveringWebView;
+    private WinForms.NotifyIcon? _notifyIcon;
+    private WinForms.ContextMenuStrip? _trayMenu;
 
     public MainWindow()
     {
@@ -102,6 +109,7 @@ public partial class MainWindow : Window
 
         _overlayWindowModeService = new OverlayWindowModeService(handle);
         _globalHotkeyService = new GlobalHotkeyService(handle);
+        InitializeTrayIcon();
 
         _overlayConfig = _configService.LoadOrDefault();
         _currentOpacity = NormalizeOpacity(_overlayConfig.Opacity);
@@ -124,12 +132,17 @@ public partial class MainWindow : Window
         }
 
         _globalHotkeyService?.Dispose();
+        DisposeTrayIcon();
         OverlayWebView.NavigationCompleted -= OnWebViewNavigationCompleted;
         OverlayWebView.NavigationStarting -= OnWebViewNavigationStarting;
         if (OverlayWebView.CoreWebView2 is not null)
         {
             OverlayWebView.CoreWebView2.SourceChanged -= OnWebViewSourceChanged;
+            OverlayWebView.CoreWebView2.ProcessFailed -= OnWebViewProcessFailed;
         }
+        _videoOptimizeCts?.Cancel();
+        _videoOptimizeCts?.Dispose();
+        _videoOptimizeCts = null;
         _indicatorHideTimer.Tick -= OnIndicatorHideTimerTick;
         _hotkeyHintHideTimer.Tick -= OnHotkeyHintHideTimerTick;
     }
@@ -264,6 +277,67 @@ public partial class MainWindow : Window
         _overlayWindowModeService?.EnsureTopmost();
         ShowHotkeyFeedback("VISIBLE");
         PlayFeedbackTone();
+    }
+
+    private void InitializeTrayIcon()
+    {
+        if (_notifyIcon is not null)
+        {
+            return;
+        }
+
+        var icon = LoadTrayIconFromResources();
+        if (icon is null)
+        {
+            return;
+        }
+
+        _trayMenu = new WinForms.ContextMenuStrip();
+        _ = _trayMenu.Items.Add("Show / Hide", null, (_, _) => Dispatcher.Invoke(ToggleVisibility));
+        _ = _trayMenu.Items.Add("Exit", null, (_, _) => Dispatcher.Invoke(ExitApplication));
+
+        _notifyIcon = new WinForms.NotifyIcon
+        {
+            Icon = icon,
+            Text = AppDisplayName,
+            Visible = true,
+            ContextMenuStrip = _trayMenu
+        };
+
+        _notifyIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ToggleVisibility);
+    }
+
+    private void DisposeTrayIcon()
+    {
+        if (_notifyIcon is not null)
+        {
+            _notifyIcon.Visible = false;
+            _notifyIcon.Icon?.Dispose();
+            _notifyIcon.Dispose();
+            _notifyIcon = null;
+        }
+
+        if (_trayMenu is not null)
+        {
+            _trayMenu.Dispose();
+            _trayMenu = null;
+        }
+    }
+
+    private static Icon? LoadTrayIconFromResources()
+    {
+        var resource = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/overlay_icon.ico"));
+        if (resource is null)
+        {
+            return null;
+        }
+
+        using var source = resource.Stream;
+        using var memory = new MemoryStream();
+        source.CopyTo(memory);
+        memory.Position = 0;
+        using var icon = new Icon(memory);
+        return (Icon)icon.Clone();
     }
 
     private void ToggleInteractMode()
@@ -531,14 +605,14 @@ public partial class MainWindow : Window
 
     private void ToggleCheatSheet()
     {
-        if (HotkeyHintTextBlock.Visibility == Visibility.Visible)
+        if (HotkeyOverlayPanel.Visibility == Visibility.Visible)
         {
             _hotkeyHintHideTimer.Stop();
-            HotkeyHintTextBlock.Visibility = Visibility.Collapsed;
+            HotkeyOverlayPanel.Visibility = Visibility.Collapsed;
             return;
         }
 
-        HotkeyHintTextBlock.Visibility = Visibility.Visible;
+        HotkeyOverlayPanel.Visibility = Visibility.Visible;
         _hotkeyHintHideTimer.Stop();
         _hotkeyHintHideTimer.Start();
     }
@@ -654,6 +728,8 @@ public partial class MainWindow : Window
         OverlayWebView.NavigationCompleted += OnWebViewNavigationCompleted;
         OverlayWebView.NavigationStarting += OnWebViewNavigationStarting;
         OverlayWebView.CoreWebView2.SourceChanged += OnWebViewSourceChanged;
+        OverlayWebView.CoreWebView2.ProcessFailed += OnWebViewProcessFailed;
+        ConfigureWebViewSettings();
 
         _isWebViewInitialized = true;
 
@@ -693,6 +769,13 @@ public partial class MainWindow : Window
         _ = sender;
         SetNavigationLoading(isLoading: true);
 
+        if (!IsAllowedNavigationUrl(e.Uri))
+        {
+            e.Cancel = true;
+            SetNavigationLoading(isLoading: false);
+            return;
+        }
+
         TrySwitchToTheaterFromUrl(e.Uri);
     }
 
@@ -707,6 +790,33 @@ public partial class MainWindow : Window
         }
 
         TrySwitchToTheaterFromUrl(OverlayWebView.CoreWebView2.Source);
+    }
+
+    private async void OnWebViewProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_isRecoveringWebView)
+        {
+            return;
+        }
+
+        _isRecoveringWebView = true;
+        try
+        {
+            ShowHotkeyFeedback("RECOVERING WEBVIEW");
+            await Task.Delay(500);
+            OverlayWebView.CoreWebView2?.Reload();
+        }
+        catch
+        {
+            // Ignore recovery failures.
+        }
+        finally
+        {
+            _isRecoveringWebView = false;
+        }
     }
 
     private void TrySwitchToTheaterFromUrl(string? url)
@@ -743,6 +853,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        _videoOptimizeCts?.Cancel();
+        _videoOptimizeCts?.Dispose();
+        _videoOptimizeCts = new CancellationTokenSource();
+        var token = _videoOptimizeCts.Token;
+
         const string optimizeScript = """
             (() => {
               const sizeButton = document.querySelector('.ytp-size-button');
@@ -769,6 +884,11 @@ public partial class MainWindow : Window
 
         for (var attempt = 0; attempt < 6; attempt++)
         {
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
             try
             {
                 _ = await OverlayWebView.CoreWebView2.ExecuteScriptAsync(optimizeScript);
@@ -778,7 +898,14 @@ public partial class MainWindow : Window
                 // Ignore transient script errors while watch page is still loading.
             }
 
-            await Task.Delay(220);
+            try
+            {
+                await Task.Delay(220, token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
         }
     }
 
@@ -1005,6 +1132,18 @@ public partial class MainWindow : Window
                url.Contains("youtu.be/", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsAllowedNavigationUrl(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        return uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+               uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+               uri.Scheme.Equals("about", StringComparison.OrdinalIgnoreCase);
+    }
+
     private void NavigateToSearchHome()
     {
         NavigateTo(YouTubeSearchUrlPrefix);
@@ -1012,6 +1151,11 @@ public partial class MainWindow : Window
 
     private void NavigateTo(string url)
     {
+        if (!IsAllowedNavigationUrl(url))
+        {
+            return;
+        }
+
         if (OverlayWebView.CoreWebView2 is not null)
         {
             OverlayWebView.CoreWebView2.Navigate(url);
@@ -1054,24 +1198,16 @@ public partial class MainWindow : Window
 
     private void ShowHotkeyHintIfNeeded()
     {
-        if (_overlayConfig.HasShownHotkeyHint)
-        {
-            return;
-        }
-
-        HotkeyHintTextBlock.Visibility = Visibility.Visible;
+        HotkeyOverlayPanel.Visibility = Visibility.Visible;
         _hotkeyHintHideTimer.Stop();
         _hotkeyHintHideTimer.Start();
-
-        _overlayConfig.HasShownHotkeyHint = true;
-        _configService.Save(_overlayConfig);
     }
 
     private void OnHotkeyHintHideTimerTick(object? sender, EventArgs e)
     {
         _ = sender;
         _hotkeyHintHideTimer.Stop();
-        HotkeyHintTextBlock.Visibility = Visibility.Collapsed;
+        HotkeyOverlayPanel.Visibility = Visibility.Collapsed;
     }
 
     private static void PlayFeedbackTone()
@@ -1191,5 +1327,22 @@ public partial class MainWindow : Window
         {
             // Ignore transient script injection errors while page transitions.
         }
+    }
+
+    private void ConfigureWebViewSettings()
+    {
+        if (OverlayWebView.CoreWebView2 is null)
+        {
+            return;
+        }
+
+        var settings = OverlayWebView.CoreWebView2.Settings;
+        settings.IsStatusBarEnabled = false;
+        settings.IsZoomControlEnabled = false;
+        settings.AreDefaultContextMenusEnabled = false;
+        settings.AreBrowserAcceleratorKeysEnabled = false;
+        settings.IsSwipeNavigationEnabled = false;
+        settings.IsGeneralAutofillEnabled = false;
+        settings.IsPasswordAutosaveEnabled = false;
     }
 }

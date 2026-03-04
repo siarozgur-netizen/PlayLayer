@@ -54,8 +54,8 @@ public partial class MainWindow : Window
     private const double VolumeStep = 0.10;
     private const string AppDisplayName = "PlayLayer";
     private static readonly bool EnableAudioFeedback = false;
-    private static readonly Brush PassBorderBrush = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
-    private static readonly Brush InteractBorderBrush = new SolidColorBrush(Color.FromArgb(0x88, 0x5E, 0xD9, 0xFF));
+    private static readonly Brush PassBorderBrush = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush InteractBorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x37, 0xD8, 0xFF));
 
     private readonly OverlayLayoutService _overlayLayoutService = new();
     private readonly ConfigService _configService = new();
@@ -125,6 +125,7 @@ public partial class MainWindow : Window
         SetInteractMode(_layoutMode == OverlayLayoutMode.Search, showIndicator: false);
         ApplyLayoutMode(_layoutMode, animate: false, showIndicator: false);
         UpdateSearchPlaceholderVisibility();
+        UpdateStateBorder();
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -1210,18 +1211,15 @@ public partial class MainWindow : Window
 
     private async Task ShowStartupHotkeyHintAsync()
     {
-        await Task.Delay(350);
-        if (!IsVisible)
-        {
-            return;
-        }
-
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+        await Task.Delay(250);
         ShowHotkeyHintIfNeeded();
     }
 
     private void UpdateStateBorder()
     {
         StateBorder.BorderBrush = _isInteractMode ? InteractBorderBrush : PassBorderBrush;
+        StateBorder.BorderThickness = _isInteractMode ? new Thickness(2) : new Thickness(1);
     }
 
     private void OnHotkeyHintHideTimerTick(object? sender, EventArgs e)

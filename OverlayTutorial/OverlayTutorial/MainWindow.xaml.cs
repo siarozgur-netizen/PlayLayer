@@ -1279,6 +1279,30 @@ public partial class MainWindow : Window
 
         var safeTitle = EscapeJsString(title);
         var safeDetail = EscapeJsString(detail);
+        var icon = "•";
+        var accent = "#7fd4ff";
+
+        if (string.Equals(title, "SEEK", StringComparison.OrdinalIgnoreCase))
+        {
+            icon = detail.StartsWith("-", StringComparison.Ordinal) ? "◀◀" : "▶▶";
+            accent = detail.StartsWith("-", StringComparison.Ordinal) ? "#ffb36b" : "#6fd7ff";
+        }
+        else if (string.Equals(title, "PLAYBACK", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(detail, "PAUSED", StringComparison.OrdinalIgnoreCase))
+            {
+                icon = "❚❚";
+                accent = "#ffd36b";
+            }
+            else
+            {
+                icon = "▶";
+                accent = "#91ea82";
+            }
+        }
+
+        var safeIcon = EscapeJsString(icon);
+        var safeAccent = EscapeJsString(accent);
 
         var script = $$"""
             (() => {
@@ -1297,16 +1321,35 @@ public partial class MainWindow : Window
               host.style.pointerEvents = 'none';
               host.style.padding = '8px 10px';
               host.style.borderRadius = '10px';
-              host.style.border = '1px solid rgba(255,255,255,0.24)';
+              host.style.border = '1px solid rgba(255,255,255,0.20)';
               host.style.background = 'rgba(9,9,9,0.72)';
               host.style.backdropFilter = 'blur(4px)';
               host.style.boxShadow = '0 10px 24px rgba(0,0,0,0.45)';
               host.style.color = '#f3f7ff';
               host.style.fontFamily = 'Segoe UI, Arial, sans-serif';
               host.style.minWidth = '116px';
+              host.style.display = 'flex';
+              host.style.alignItems = 'center';
+              host.style.gap = '9px';
               host.style.opacity = '0';
               host.style.transform = 'translateY(8px) scale(0.96)';
               host.style.transition = 'opacity 120ms ease, transform 120ms ease';
+
+              const iconWrap = document.createElement('div');
+              iconWrap.style.minWidth = '28px';
+              iconWrap.style.height = '28px';
+              iconWrap.style.display = 'grid';
+              iconWrap.style.placeItems = 'center';
+              iconWrap.style.borderRadius = '8px';
+              iconWrap.style.background = '{{safeAccent}}';
+              iconWrap.style.color = '#0a0e13';
+              iconWrap.style.fontSize = '12px';
+              iconWrap.style.fontWeight = '700';
+              iconWrap.textContent = '{{safeIcon}}';
+
+              const textWrap = document.createElement('div');
+              textWrap.style.display = 'flex';
+              textWrap.style.flexDirection = 'column';
 
               const titleNode = document.createElement('div');
               titleNode.textContent = '{{safeTitle}}';
@@ -1321,8 +1364,10 @@ public partial class MainWindow : Window
               detailNode.style.fontWeight = '600';
               detailNode.style.lineHeight = '1.1';
 
-              host.appendChild(titleNode);
-              host.appendChild(detailNode);
+              textWrap.appendChild(titleNode);
+              textWrap.appendChild(detailNode);
+              host.appendChild(iconWrap);
+              host.appendChild(textWrap);
               document.body.appendChild(host);
 
               requestAnimationFrame(() => {

@@ -13,9 +13,6 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: OverlayTutorial
 
     steps:
       - name: Checkout repository
@@ -35,9 +32,6 @@ jobs:
   package-windows:
     runs-on: windows-latest
     if: github.event_name == 'push'
-    defaults:
-      run:
-        working-directory: OverlayTutorial
 
     steps:
       - name: Checkout repository
@@ -55,7 +49,7 @@ jobs:
         run: dotnet build OverlayTutorial.sln -c Release --no-restore
 
       - name: Publish app output
-        run: dotnet publish OverlayTutorial/OverlayTutorial.csproj -c Release -r win-x64 --self-contained false -o out/win-x64
+        run: dotnet publish OverlayTutorial/OverlayTutorial/OverlayTutorial.csproj -c Release -r win-x64 --self-contained false -o out/win-x64
 
       - name: Create zip artifact
         shell: pwsh
@@ -65,4 +59,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: OverlayTutorial-win-x64
-          path: OverlayTutorial/OverlayTutorial-win-x64.zip
+          path: OverlayTutorial-win-x64.zip

@@ -1277,8 +1277,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        var safeTitle = EscapeJsString(title);
-        var safeDetail = EscapeJsString(detail);
         var icon = "•";
         var accent = "#7fd4ff";
 
@@ -1312,77 +1310,38 @@ public partial class MainWindow : Window
                 existing.remove();
               }
 
-              const host = document.createElement('div');
-              host.id = id;
-              host.style.position = 'fixed';
-              host.style.right = '18px';
-              host.style.bottom = '18px';
-              host.style.zIndex = '2147483647';
-              host.style.pointerEvents = 'none';
-              host.style.padding = '8px 10px';
-              host.style.borderRadius = '10px';
-              host.style.border = '1px solid rgba(255,255,255,0.20)';
-              host.style.background = 'rgba(9,9,9,0.72)';
-              host.style.backdropFilter = 'blur(4px)';
-              host.style.boxShadow = '0 10px 24px rgba(0,0,0,0.45)';
-              host.style.color = '#f3f7ff';
-              host.style.fontFamily = 'Segoe UI, Arial, sans-serif';
-              host.style.minWidth = '116px';
-              host.style.display = 'flex';
-              host.style.alignItems = 'center';
-              host.style.gap = '9px';
-              host.style.opacity = '0';
-              host.style.transform = 'translateY(8px) scale(0.96)';
-              host.style.transition = 'opacity 120ms ease, transform 120ms ease';
-
-              const iconWrap = document.createElement('div');
-              iconWrap.style.minWidth = '28px';
-              iconWrap.style.height = '28px';
-              iconWrap.style.display = 'grid';
-              iconWrap.style.placeItems = 'center';
-              iconWrap.style.borderRadius = '8px';
-              iconWrap.style.background = '{{safeAccent}}';
-              iconWrap.style.color = '#0a0e13';
-              iconWrap.style.fontSize = '12px';
-              iconWrap.style.fontWeight = '700';
-              iconWrap.textContent = '{{safeIcon}}';
-
-              const textWrap = document.createElement('div');
-              textWrap.style.display = 'flex';
-              textWrap.style.flexDirection = 'column';
-
-              const titleNode = document.createElement('div');
-              titleNode.textContent = '{{safeTitle}}';
-              titleNode.style.fontSize = '10px';
-              titleNode.style.letterSpacing = '0.9px';
-              titleNode.style.opacity = '0.78';
-              titleNode.style.marginBottom = '1px';
-
-              const detailNode = document.createElement('div');
-              detailNode.textContent = '{{safeDetail}}';
-              detailNode.style.fontSize = '14px';
-              detailNode.style.fontWeight = '600';
-              detailNode.style.lineHeight = '1.1';
-
-              textWrap.appendChild(titleNode);
-              textWrap.appendChild(detailNode);
-              host.appendChild(iconWrap);
-              host.appendChild(textWrap);
-              document.body.appendChild(host);
+              const iconNode = document.createElement('div');
+              iconNode.id = id;
+              iconNode.style.position = 'fixed';
+              iconNode.style.right = '22px';
+              iconNode.style.bottom = '20px';
+              iconNode.style.zIndex = '2147483647';
+              iconNode.style.pointerEvents = 'none';
+              iconNode.style.color = '{{safeAccent}}';
+              iconNode.style.fontFamily = 'Segoe UI Symbol, Segoe UI, Arial, sans-serif';
+              iconNode.style.fontWeight = '700';
+              iconNode.style.fontSize = '26px';
+              iconNode.style.lineHeight = '1';
+              iconNode.style.textShadow = '0 4px 18px rgba(0,0,0,0.85)';
+              iconNode.style.opacity = '0';
+              iconNode.style.transform = 'translateY(8px) scale(0.9)';
+              iconNode.style.transition = 'opacity 110ms ease, transform 110ms ease';
+              iconNode.textContent = '{{safeIcon}}';
+              document.body.appendChild(iconNode);
 
               requestAnimationFrame(() => {
-                host.style.opacity = '1';
-                host.style.transform = 'translateY(0) scale(1)';
+                iconNode.style.opacity = '1';
+                iconNode.style.transform = 'translateY(0) scale(1)';
               });
 
               window.setTimeout(() => {
-                host.style.opacity = '0';
-                host.style.transform = 'translateY(6px) scale(0.97)';
-              }, 720);
+                iconNode.style.opacity = '0';
+                iconNode.style.transform = 'translateY(6px) scale(0.94)';
+              }, 520);
 
               window.setTimeout(() => {
-                if (host.parentNode) host.parentNode.removeChild(host);
-              }, 900);
+                if (iconNode.parentNode) iconNode.parentNode.removeChild(iconNode);
+              }, 700);
             })();
             """;
 

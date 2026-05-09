@@ -1,0 +1,54 @@
+import Foundation
+
+@MainActor
+final class OverlayRuntimeState: ObservableObject {
+    @Published var indicatorText: String
+    @Published var searchText: String
+    @Published var isVideoMode: Bool
+    @Published var isPlaybackLocked: Bool
+    @Published var isOverlayFullscreen: Bool
+    @Published var guideRequestID: Int
+    @Published var actionFeedback: ActionFeedback?
+    @Published var theaterTransitionID: Int
+    let webViewBridge: WebViewBridge
+
+    init(indicatorText: String, searchText: String = "", isOverlayFullscreen: Bool = false) {
+        self.indicatorText = indicatorText
+        self.searchText = searchText
+        self.isVideoMode = false
+        self.isPlaybackLocked = false
+        self.isOverlayFullscreen = isOverlayFullscreen
+        self.guideRequestID = 0
+        self.actionFeedback = nil
+        self.theaterTransitionID = 0
+        self.webViewBridge = WebViewBridge()
+        self.webViewBridge.onNavigationStateChanged = { [weak self] isVideoMode, urlString in
+            self?.isVideoMode = isVideoMode
+            if !isVideoMode && self?.isPlaybackLocked != true {
+                self?.searchText = ""
+            }
+            _ = urlString
+        }
+        self.webViewBridge.onOverlayFullscreenRequested = { [weak self] in
+            self?.isOverlayFullscreen.toggle()
+        }
+    }
+
+    func requestGuide() {
+        guideRequestID += 1
+    }
+
+    func showActionFeedback(icon: String, title: String) {
+        actionFeedback = ActionFeedback(icon: icon, title: title)
+    }
+
+    func requestTheaterTransition() {
+        theaterTransitionID += 1
+    }
+}
+
+struct ActionFeedback: Identifiable, Equatable {
+    let id = UUID()
+    let icon: String
+    let title: String
+}

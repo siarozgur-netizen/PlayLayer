@@ -3,11 +3,11 @@ import SwiftUI
 import Combine
 
 @MainActor
-final class OverlayWindowController: NSWindowController {
-    private let layoutService = OverlayLayoutService()
+final class PanelWindowController: NSWindowController, NSWindowDelegate {
+    private let layoutService = PanelLayoutService()
     private let configService: ConfigService
     private var config: AppConfig
-    private let runtimeState: OverlayRuntimeState
+    private let runtimeState: PanelRuntimeState
     private var cancellables = Set<AnyCancellable>()
     private var lastVideoMode = false
     private var activeSpaceObserver: NSObjectProtocol?
@@ -16,37 +16,45 @@ final class OverlayWindowController: NSWindowController {
     init(config: AppConfig, configService: ConfigService) {
         self.config = config
         self.configService = configService
-        self.runtimeState = OverlayRuntimeState(
-            indicatorText: "",
+        self.runtimeState = PanelRuntimeState(
             isOverlayFullscreen: false
         )
+        self.runtimeState.webPanelBridge.initialURLString = config.panelHomeURL
 
-        let frame = layoutService.browseFrame()
-        let window = OverlayWindow(
+        let frame = Self.savedBrowseFrame(from: config) ?? layoutService.browseFrame()
+        let window = PanelWindow(
             contentRect: frame,
-            styleMask: [.borderless],
+            styleMask: [.borderless, .resizable],
             backing: .buffered,
             defer: false
         )
 
         window.isReleasedWhenClosed = false
-        window.backgroundColor = .black
-        window.isOpaque = true
+        window.backgroundColor = .clear
+        window.isOpaque = false
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.hasShadow = true
         window.ignoresMouseEvents = !config.interactModeEnabled
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-
-        let rootView = OverlayRootView(runtimeState: runtimeState)
-        let hostingView = NSHostingView(rootView: rootView)
-        hostingView.wantsLayer = true
-        hostingView.layer?.backgroundColor = NSColor.black.cgColor
-        window.contentView = hostingView
+        window.isMovableByWindowBackground = false
+        window.minSize = NSSize(width: 420, height: 260)
+        window.maxSize = Self.maximumWebPanelSize()
 
         super.init(window: window)
-        updateIndicator()
+        window.delegate = self
+        let rootView = WebPanelView(
+            runtimeState: runtimeState,
+            onReload: { [weak self] in self?.reloadWebContent() },
+            onOpenInBrowser: { [weak self] in self?.openCurrentURLInBrowser() },
+            onCopyURL: { [weak self] in self?.copyCurrentURL() },
+            onClose: { [weak self] in self?.hideOverlay() }
+        )
+        let hostingView = NSHostingView(rootView: rootView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        window.contentView = hostingView
         bindRuntimeState()
         installActiveSpaceObserver()
     }
@@ -66,14 +74,31 @@ final class OverlayWindowController: NSWindowController {
         }
     }
 
-    func showOverlay() {
+    func showOverlay(showFeedback: Bool = true) {
         presentOverlay(activateApp: true)
-        runtimeState.showActionFeedback(icon: "eye.fill", title: "Shown")
+        if showFeedback {
+            runtimeState.showActionFeedback(icon: "eye.fill", title: "Shown")
+        }
+    }
+
+    var isOverlayVisible: Bool {
+        window?.isVisible ?? false
+    }
+
+    var currentFrame: CGRect? {
+        window?.frame
+    }
+
+    var currentURLString: String {
+        runtimeState.webPanelBridge.currentURLString
     }
 
     func hideOverlay() {
         runtimeState.showActionFeedback(icon: "eye.slash.fill", title: "Hidden")
-        window?.orderOut(nil)
+        guard let window else { return }
+        PanelMotion.animateOut(window) { [weak self] in
+            self?.window?.orderOut(nil)
+        }
     }
 
     func toggleOverlayVisibility() {
@@ -88,16 +113,22 @@ final class OverlayWindowController: NSWindowController {
 
     private func presentOverlay(activateApp: Bool) {
         guard let window else { return }
+        let shouldAnimate = !window.isVisible
         applyLayoutForCurrentMode()
         configureWindowForOverlayBehavior(window)
         window.alphaValue = config.opacity
         updateWindowMode()
 
         if activateApp {
+            NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
             NSApplication.shared.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
         } else {
             window.orderFrontRegardless()
+        }
+
+        if shouldAnimate {
+            PanelMotion.animateIn(window)
         }
     }
 
@@ -105,7 +136,6 @@ final class OverlayWindowController: NSWindowController {
         config.interactModeEnabled = enabled
         configService.save(config)
         updateWindowMode()
-        updateIndicator()
     }
 
     func toggleInteractMode() {
@@ -117,34 +147,61 @@ final class OverlayWindowController: NSWindowController {
         runtimeState.showActionFeedback(icon: "keyboard.fill", title: "Guide")
     }
 
+    func showActionFeedback(icon: String, title: String) {
+        runtimeState.showActionFeedback(icon: icon, title: title)
+    }
+
     func togglePlayback() {
-        runtimeState.webViewBridge.togglePlayback()
+        runtimeState.webPanelBridge.togglePlayback()
         runtimeState.showActionFeedback(icon: "playpause.fill", title: "Play / Pause")
     }
 
     func seekBackward() {
-        runtimeState.webViewBridge.seek(by: -10)
+        runtimeState.webPanelBridge.seek(by: -10)
         runtimeState.showActionFeedback(icon: "gobackward.10", title: "-10s")
     }
 
     func seekForward() {
-        runtimeState.webViewBridge.seek(by: 10)
+        runtimeState.webPanelBridge.seek(by: 10)
         runtimeState.showActionFeedback(icon: "goforward.10", title: "+10s")
     }
 
-    func exitOverlayPlaybackMode() {
-        runtimeState.isPlaybackLocked = false
+    private func reloadWebContent() {
+        runtimeState.webPanelBridge.reload()
+        runtimeState.showActionFeedback(icon: "arrow.clockwise", title: "Reloaded")
+    }
+
+    private func openCurrentURLInBrowser() {
+        guard let url = URL(string: currentURLString) else { return }
+        NSWorkspace.shared.open(url)
+        runtimeState.showActionFeedback(icon: "safari.fill", title: "Opened in Browser")
+    }
+
+    private func copyCurrentURL() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(currentURLString, forType: .string)
+        runtimeState.showActionFeedback(icon: "link", title: "Copied URL")
+    }
+
+    func toggleTheaterMode() {
+        guard runtimeState.isVideoMode || runtimeState.isPlaybackLocked else {
+            runtimeState.showActionFeedback(icon: "rectangle.on.rectangle.slash.fill", title: "Theater Unavailable")
+            return
+        }
+
+        runtimeState.isPlaybackLocked.toggle()
         runtimeState.isOverlayFullscreen = false
-        setInteractMode(true)
         applyLayoutForCurrentMode()
-        runtimeState.showActionFeedback(icon: "rectangle.compress.vertical", title: "Exit Theater")
+        runtimeState.showActionFeedback(
+            icon: runtimeState.isPlaybackLocked ? "rectangle.expand.vertical" : "rectangle.compress.vertical",
+            title: runtimeState.isPlaybackLocked ? "Theater" : "Exit Theater"
+        )
     }
 
     func returnToHome() {
         runtimeState.isPlaybackLocked = false
         runtimeState.isOverlayFullscreen = false
-        runtimeState.webViewBridge.navigateHome()
-        setInteractMode(true)
+        runtimeState.webPanelBridge.navigateHome()
         applyLayoutForCurrentMode()
         runtimeState.showActionFeedback(icon: "house.fill", title: "Home")
     }
@@ -153,14 +210,10 @@ final class OverlayWindowController: NSWindowController {
         window?.ignoresMouseEvents = !config.interactModeEnabled
 
         if config.interactModeEnabled, let window, window.isVisible {
+            NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
             NSApplication.shared.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
         }
-    }
-
-    private func updateIndicator() {
-        let percent = Int((config.opacity * 100).rounded())
-        runtimeState.indicatorText = "\(config.interactModeEnabled ? "INTERACT" : "PASS") \(percent)%"
     }
 
     private func bindRuntimeState() {
@@ -188,12 +241,7 @@ final class OverlayWindowController: NSWindowController {
         }
 
         if isVideoMode && !lastVideoMode {
-            runtimeState.isPlaybackLocked = true
-            runtimeState.isOverlayFullscreen = false
-            setInteractMode(false)
             applyLayoutForCurrentMode()
-            runtimeState.requestTheaterTransition()
-            runtimeState.showActionFeedback(icon: "play.rectangle.fill", title: "Theater · PASS")
             return
         }
 
@@ -203,7 +251,6 @@ final class OverlayWindowController: NSWindowController {
             }
 
             runtimeState.isOverlayFullscreen = false
-            setInteractMode(true)
             applyLayoutForCurrentMode()
             return
         }
@@ -218,10 +265,10 @@ final class OverlayWindowController: NSWindowController {
             layoutService.applyFullscreenOverlayFrame(to: window)
         } else if runtimeState.isPlaybackLocked {
             layoutService.applyTheaterFrame(to: window)
-        } else if runtimeState.isVideoMode {
-            layoutService.applyTheaterFrame(to: window)
         } else {
-            layoutService.applyBrowseFrame(to: window)
+            let targetFrame = Self.savedBrowseFrame(from: config) ?? layoutService.browseFrame()
+            guard !window.frame.integral.equalTo(targetFrame.integral) else { return }
+            window.setFrame(targetFrame, display: true, animate: false)
         }
     }
 
@@ -280,5 +327,69 @@ final class OverlayWindowController: NSWindowController {
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.ignoresMouseEvents = !config.interactModeEnabled
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        _ = notification
+        persistCurrentBrowseFrameIfNeeded()
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        _ = notification
+        persistCurrentBrowseFrameIfNeeded()
+    }
+
+    func windowDidChangeScreen(_ notification: Notification) {
+        _ = notification
+        window?.maxSize = Self.maximumWebPanelSize()
+    }
+
+    private func persistCurrentBrowseFrameIfNeeded() {
+        guard shouldPersistCurrentBrowseFrame, let window else { return }
+
+        config.panelFrameX = window.frame.origin.x
+        config.panelFrameY = window.frame.origin.y
+        config.panelFrameWidth = window.frame.width
+        config.panelFrameHeight = window.frame.height
+        configService.save(config)
+    }
+
+    private var shouldPersistCurrentBrowseFrame: Bool {
+        !runtimeState.isOverlayFullscreen && !runtimeState.isPlaybackLocked
+    }
+
+    private static func savedBrowseFrame(from config: AppConfig) -> CGRect? {
+        guard
+            let x = config.panelFrameX,
+            let y = config.panelFrameY,
+            let width = config.panelFrameWidth,
+            let height = config.panelFrameHeight,
+            width >= 360,
+            height >= 220
+        else {
+            return nil
+        }
+
+        let savedFrame = CGRect(x: x, y: y, width: width, height: height)
+        let visibleFrame = NSScreen.main?.visibleFrame ?? savedFrame
+        let constrainedWidth = min(max(savedFrame.width, 360), visibleFrame.width)
+        let constrainedHeight = min(max(savedFrame.height, 220), visibleFrame.height)
+        let constrainedX = min(max(savedFrame.minX, visibleFrame.minX), visibleFrame.maxX - constrainedWidth)
+        let constrainedY = min(max(savedFrame.minY, visibleFrame.minY), visibleFrame.maxY - constrainedHeight)
+
+        return CGRect(
+            x: constrainedX,
+            y: constrainedY,
+            width: constrainedWidth,
+            height: constrainedHeight
+        )
+    }
+
+    private static func maximumWebPanelSize() -> NSSize {
+        let screen = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1728, height: 1117)
+        return NSSize(
+            width: min(screen.width - 32, screen.width * 0.84),
+            height: min(screen.height - 32, screen.height * 0.84)
+        )
     }
 }

@@ -3,13 +3,15 @@ import Foundation
 final class LaunchGuardService {
     private var socketDescriptor: Int32 = -1
     private var socketURL: URL?
+    private(set) var lastFailureReason: String?
 
     func acquire() -> Bool {
+        lastFailureReason = nil
         let socketURL = socketFileURL()
         self.socketURL = socketURL
 
-        socketDescriptor = socket(AF_UNIX, SOCK_STREAM, 0)
-        if socketDescriptor == -1 {
+        guard createSocketDescriptor() else {
+            lastFailureReason = "socket() failed"
             return false
         }
 
@@ -19,18 +21,27 @@ final class LaunchGuardService {
         }
 
         if existingInstanceIsAlive(at: socketURL) {
+            lastFailureReason = "existing instance responded on launch socket"
             close(socketDescriptor)
             socketDescriptor = -1
             return false
         }
 
         unlink(socketURL.path)
+        close(socketDescriptor)
+        socketDescriptor = -1
+
+        guard createSocketDescriptor() else {
+            lastFailureReason = "socket() retry failed after stale socket cleanup"
+            return false
+        }
 
         if bindSocket(at: socketURL) {
             listen(socketDescriptor, 1)
             return true
         }
 
+        lastFailureReason = "bind() retry failed after stale socket cleanup"
         close(socketDescriptor)
         socketDescriptor = -1
         return false
@@ -73,6 +84,11 @@ final class LaunchGuardService {
         }
 
         return result == 0
+    }
+
+    private func createSocketDescriptor() -> Bool {
+        socketDescriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        return socketDescriptor != -1
     }
 
     private func existingInstanceIsAlive(at url: URL) -> Bool {

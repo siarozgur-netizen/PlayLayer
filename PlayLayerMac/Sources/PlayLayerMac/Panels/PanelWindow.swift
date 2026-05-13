@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class OverlayWindow: NSWindow {
+final class PanelWindow: NSWindow {
     override var canBecomeKey: Bool {
         true
     }

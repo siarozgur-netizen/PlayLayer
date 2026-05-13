@@ -15,7 +15,10 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "PlayLayerMac"
+            name: "PlayLayerMac",
+            resources: [
+                .process("Resources"),
+            ]
         ),
     ],
 )

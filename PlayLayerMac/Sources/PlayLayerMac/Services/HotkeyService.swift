@@ -8,13 +8,17 @@ final class HotkeyService {
     }
 
     private enum HotkeyID: UInt32 {
-        case exitOverlayPlaybackMode = 1
+        case toggleTheaterMode = 1
         case returnToHome = 2
         case toggleOverlayVisibility = 3
         case showGuide = 4
         case togglePlayback = 5
         case seekBackward = 6
         case seekForward = 7
+        case openSampleImagePanel = 8
+        case captureAreaToPanel = 9
+        case showCommandBar = 10
+        case showCommandBarAlternate = 11
     }
 
     private var registrations: [Registration] = []
@@ -22,26 +26,33 @@ final class HotkeyService {
     private var handlers: [UInt32: () -> Void] = [:]
 
     func registerDefaultHotkeys(
-        exitOverlayPlaybackModeHandler: @escaping () -> Void,
+        toggleTheaterModeHandler: @escaping () -> Void,
         returnToHomeHandler: @escaping () -> Void,
         toggleOverlayVisibilityHandler: @escaping () -> Void,
         showGuideHandler: @escaping () -> Void,
         togglePlaybackHandler: @escaping () -> Void,
         seekBackwardHandler: @escaping () -> Void,
-        seekForwardHandler: @escaping () -> Void
+        seekForwardHandler: @escaping () -> Void,
+        openSampleImagePanelHandler: @escaping () -> Void,
+        captureAreaToPanelHandler: @escaping () -> Void,
+        showCommandBarHandler: @escaping () -> Void
     ) {
         unregisterAllHotkeys()
         installEventHandlerIfNeeded()
 
-        handlers[HotkeyID.exitOverlayPlaybackMode.rawValue] = exitOverlayPlaybackModeHandler
+        handlers[HotkeyID.toggleTheaterMode.rawValue] = toggleTheaterModeHandler
         handlers[HotkeyID.returnToHome.rawValue] = returnToHomeHandler
         handlers[HotkeyID.toggleOverlayVisibility.rawValue] = toggleOverlayVisibilityHandler
         handlers[HotkeyID.showGuide.rawValue] = showGuideHandler
         handlers[HotkeyID.togglePlayback.rawValue] = togglePlaybackHandler
         handlers[HotkeyID.seekBackward.rawValue] = seekBackwardHandler
         handlers[HotkeyID.seekForward.rawValue] = seekForwardHandler
+        handlers[HotkeyID.openSampleImagePanel.rawValue] = openSampleImagePanelHandler
+        handlers[HotkeyID.captureAreaToPanel.rawValue] = captureAreaToPanelHandler
+        handlers[HotkeyID.showCommandBar.rawValue] = showCommandBarHandler
+        handlers[HotkeyID.showCommandBarAlternate.rawValue] = showCommandBarHandler
         registerHotKey(
-            id: .exitOverlayPlaybackMode,
+            id: .toggleTheaterMode,
             keyCode: UInt32(kVK_ANSI_T),
             modifiers: UInt32(controlKey | optionKey)
         )
@@ -73,6 +84,26 @@ final class HotkeyService {
         registerHotKey(
             id: .seekForward,
             keyCode: UInt32(kVK_RightArrow),
+            modifiers: UInt32(controlKey | optionKey)
+        )
+        registerHotKey(
+            id: .openSampleImagePanel,
+            keyCode: UInt32(kVK_ANSI_S),
+            modifiers: UInt32(controlKey | optionKey)
+        )
+        registerHotKey(
+            id: .captureAreaToPanel,
+            keyCode: UInt32(kVK_ANSI_2),
+            modifiers: UInt32(controlKey | optionKey)
+        )
+        registerHotKey(
+            id: .showCommandBar,
+            keyCode: UInt32(kVK_Space),
+            modifiers: UInt32(controlKey | optionKey)
+        )
+        registerHotKey(
+            id: .showCommandBarAlternate,
+            keyCode: UInt32(kVK_ANSI_L),
             modifiers: UInt32(controlKey | optionKey)
         )
     }
@@ -136,6 +167,8 @@ final class HotkeyService {
 
         if status == noErr {
             registrations.append(Registration(id: id.rawValue, ref: hotKeyRef))
+        } else {
+            print("[Lumi][Hotkeys] Failed to register hotkey id \(id.rawValue) status \(status)")
         }
     }
 

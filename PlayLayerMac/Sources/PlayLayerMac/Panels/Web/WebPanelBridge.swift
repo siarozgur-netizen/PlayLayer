@@ -2,10 +2,12 @@ import Foundation
 import WebKit
 
 @MainActor
-final class WebViewBridge: ObservableObject {
+final class WebPanelBridge: ObservableObject {
     weak var webView: WKWebView?
     var onNavigationStateChanged: ((Bool, String) -> Void)?
     var onOverlayFullscreenRequested: (() -> Void)?
+    var initialURLString = WebPanelDefaults.homeURL
+    private(set) var currentURLString = WebPanelDefaults.homeURL
 
     func attach(_ webView: WKWebView) {
         self.webView = webView
@@ -16,20 +18,16 @@ final class WebViewBridge: ObservableObject {
             return
         }
 
+        currentURLString = urlString
         webView?.load(URLRequest(url: url))
     }
 
-    func searchYouTube(query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let target = encoded.isEmpty
-            ? "https://www.youtube.com"
-            : "https://www.youtube.com/results?search_query=\(encoded)"
-        navigate(to: target)
+    func searchCurrentContent(query: String) {
+        navigate(to: WebPanelDefaults.searchURL(for: query))
     }
 
-    func isVideoURL(_ url: URL) -> Bool {
-        guard isYouTubeHost(url) else {
+    func isPanelVideoURL(_ url: URL) -> Bool {
+        guard isSupportedHost(url) else {
             return false
         }
 
@@ -42,7 +40,8 @@ final class WebViewBridge: ObservableObject {
             return
         }
 
-        let isVideoMode = isVideoURL(url)
+        currentURLString = url.absoluteString
+        let isVideoMode = isPanelVideoURL(url)
         onNavigationStateChanged?(isVideoMode, url.absoluteString)
     }
 
@@ -51,7 +50,11 @@ final class WebViewBridge: ObservableObject {
     }
 
     func navigateHome() {
-        navigate(to: "https://www.youtube.com")
+        navigate(to: WebPanelDefaults.homeURL)
+    }
+
+    func reload() {
+        webView?.reload()
     }
 
     func togglePlayback() {
@@ -92,11 +95,11 @@ final class WebViewBridge: ObservableObject {
         )
     }
 
-    private func isYouTubeHost(_ url: URL) -> Bool {
+    private func isSupportedHost(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else {
             return false
         }
 
-        return host.contains("youtube.com") || host.contains("youtu.be")
+        return WebPanelDefaults.supportedHosts.contains { host.contains($0) }
     }
 }

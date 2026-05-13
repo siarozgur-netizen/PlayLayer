@@ -1,8 +1,7 @@
 import Foundation
 
 @MainActor
-final class OverlayRuntimeState: ObservableObject {
-    @Published var indicatorText: String
+final class PanelRuntimeState: ObservableObject {
     @Published var searchText: String
     @Published var isVideoMode: Bool
     @Published var isPlaybackLocked: Bool
@@ -10,10 +9,9 @@ final class OverlayRuntimeState: ObservableObject {
     @Published var guideRequestID: Int
     @Published var actionFeedback: ActionFeedback?
     @Published var theaterTransitionID: Int
-    let webViewBridge: WebViewBridge
+    let webPanelBridge: WebPanelBridge
 
-    init(indicatorText: String, searchText: String = "", isOverlayFullscreen: Bool = false) {
-        self.indicatorText = indicatorText
+    init(searchText: String = "", isOverlayFullscreen: Bool = false) {
         self.searchText = searchText
         self.isVideoMode = false
         self.isPlaybackLocked = false
@@ -21,15 +19,15 @@ final class OverlayRuntimeState: ObservableObject {
         self.guideRequestID = 0
         self.actionFeedback = nil
         self.theaterTransitionID = 0
-        self.webViewBridge = WebViewBridge()
-        self.webViewBridge.onNavigationStateChanged = { [weak self] isVideoMode, urlString in
+        self.webPanelBridge = WebPanelBridge()
+        self.webPanelBridge.onNavigationStateChanged = { [weak self] isVideoMode, urlString in
             self?.isVideoMode = isVideoMode
             if !isVideoMode && self?.isPlaybackLocked != true {
                 self?.searchText = ""
             }
             _ = urlString
         }
-        self.webViewBridge.onOverlayFullscreenRequested = { [weak self] in
+        self.webPanelBridge.onOverlayFullscreenRequested = { [weak self] in
             self?.isOverlayFullscreen.toggle()
         }
     }

@@ -6,7 +6,6 @@ final class PanelRuntimeState: ObservableObject {
     @Published var isVideoMode: Bool
     @Published var isPlaybackLocked: Bool
     @Published var isOverlayFullscreen: Bool
-    @Published var guideRequestID: Int
     @Published var actionFeedback: ActionFeedback?
     @Published var theaterTransitionID: Int
     let webPanelBridge: WebPanelBridge
@@ -16,7 +15,6 @@ final class PanelRuntimeState: ObservableObject {
         self.isVideoMode = false
         self.isPlaybackLocked = false
         self.isOverlayFullscreen = isOverlayFullscreen
-        self.guideRequestID = 0
         self.actionFeedback = nil
         self.theaterTransitionID = 0
         self.webPanelBridge = WebPanelBridge()
@@ -30,10 +28,6 @@ final class PanelRuntimeState: ObservableObject {
         self.webPanelBridge.onOverlayFullscreenRequested = { [weak self] in
             self?.isOverlayFullscreen.toggle()
         }
-    }
-
-    func requestGuide() {
-        guideRequestID += 1
     }
 
     func showActionFeedback(icon: String, title: String) {

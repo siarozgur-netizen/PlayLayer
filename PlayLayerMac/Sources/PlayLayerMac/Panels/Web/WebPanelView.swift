@@ -8,10 +8,8 @@ struct WebPanelView: View {
     let onCopyURL: () -> Void
     let onClose: () -> Void
     @State private var showsStartupHint = true
-    @State private var showsKeyboardShortcuts = false
     @State private var isPointerInsidePanel = false
     @State private var hideStartupHintWorkItem: DispatchWorkItem?
-    @State private var hideKeyboardShortcutsWorkItem: DispatchWorkItem?
     @State private var visibleFeedback: ActionFeedback?
     @State private var hideFeedbackWorkItem: DispatchWorkItem?
     @State private var showsTheaterTransition = false
@@ -37,10 +35,6 @@ struct WebPanelView: View {
         isPointerInsidePanel || isPointerOverControlDock
     }
 
-    private var isImmersiveContentMode: Bool {
-        runtimeState.isVideoMode || runtimeState.isPlaybackLocked
-    }
-
     var body: some View {
         ZStack(alignment: .top) {
             ZStack {
@@ -61,28 +55,6 @@ struct WebPanelView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
                         .allowsHitTesting(false)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
-
-                if showsKeyboardShortcuts {
-                    KeyboardShortcutsCard(isCompact: isImmersiveContentMode)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, isImmersiveContentMode ? 18 : 0)
-                        .padding(.top, isImmersiveContentMode ? 0 : 14)
-                        .padding(.leading, isImmersiveContentMode ? 0 : 14)
-                        .transition(
-                            .opacity.combined(
-                                with: .scale(
-                                    scale: 0.98,
-                                    anchor: isImmersiveContentMode ? .bottom : .topLeading
-                                )
-                            )
-                        )
-                        .allowsHitTesting(false)
-                        .frame(
-                            maxWidth: .infinity,
-                            maxHeight: .infinity,
-                            alignment: isImmersiveContentMode ? .bottom : .topLeading
-                        )
                 }
 
                 if let visibleFeedback {
@@ -114,16 +86,12 @@ struct WebPanelView: View {
             .offset(y: showsControlDock ? -12 : -54)
         }
         .animation(.easeOut(duration: 0.16), value: showsStartupHint)
-        .animation(.easeOut(duration: 0.16), value: showsKeyboardShortcuts)
         .animation(.easeOut(duration: 0.14), value: visibleFeedback)
         .animation(.easeOut(duration: 0.18), value: showsTheaterTransition)
         .animation(.easeOut(duration: 0.12), value: isPointerInsidePanel)
         .animation(.easeOut(duration: 0.14), value: showsControlDock)
         .onAppear {
             showStartupHintTemporarily()
-        }
-        .onChange(of: runtimeState.guideRequestID) { _ in
-            showKeyboardShortcutsTemporarily()
         }
         .onChange(of: runtimeState.actionFeedback) { feedback in
             showFeedbackTemporarily(feedback)
@@ -134,8 +102,6 @@ struct WebPanelView: View {
         .onDisappear {
             hideStartupHintWorkItem?.cancel()
             hideStartupHintWorkItem = nil
-            hideKeyboardShortcutsWorkItem?.cancel()
-            hideKeyboardShortcutsWorkItem = nil
             hideFeedbackWorkItem?.cancel()
             hideFeedbackWorkItem = nil
             hideTheaterTransitionWorkItem?.cancel()
@@ -153,18 +119,6 @@ struct WebPanelView: View {
 
         hideStartupHintWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 4.0, execute: workItem)
-    }
-
-    private func showKeyboardShortcutsTemporarily() {
-        hideKeyboardShortcutsWorkItem?.cancel()
-        showsKeyboardShortcuts = true
-
-        let workItem = DispatchWorkItem {
-            showsKeyboardShortcuts = false
-        }
-
-        hideKeyboardShortcutsWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0, execute: workItem)
     }
 
     private func showFeedbackTemporarily(_ feedback: ActionFeedback?) {
@@ -384,67 +338,6 @@ private struct StartupHintPill: View {
         }
         .shadow(color: .black.opacity(0.32), radius: 16, x: 0, y: 8)
     }
-}
-
-private struct KeyboardShortcutsCard: View {
-    let isCompact: Bool
-
-    private let primaryItems: [KeyboardShortcutItem] = [
-        KeyboardShortcutItem(keys: "Ctrl + Option + L/Space", label: "Open Lumi"),
-        KeyboardShortcutItem(keys: "Ctrl + Option + O", label: "Toggle Panels"),
-        KeyboardShortcutItem(keys: "Ctrl + Option + H", label: "Home"),
-        KeyboardShortcutItem(keys: "Ctrl + Option + T", label: "Toggle Theater"),
-        KeyboardShortcutItem(keys: "Ctrl + Option + P", label: "Play / Pause"),
-        KeyboardShortcutItem(keys: "Ctrl + Option + ←/→", label: "Seek 10s"),
-        KeyboardShortcutItem(keys: "Ctrl + Option + 2", label: "Capture Area")
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: isCompact ? 10 : 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "keyboard")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.45, green: 0.78, blue: 1.0))
-
-                Text("Keyboard Shortcuts")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-
-            VStack(alignment: .leading, spacing: isCompact ? 6 : 7) {
-                ForEach(primaryItems) { item in
-                    HStack(spacing: 10) {
-                        Text(item.keys)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-                        Text(item.label)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.82))
-                    }
-                }
-            }
-        }
-        .padding(isCompact ? 13 : 14)
-        .frame(width: isCompact ? 332 : 300, alignment: .leading)
-        .background(.black.opacity(0.76))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.32), radius: 22, x: 0, y: 10)
-    }
-}
-
-private struct KeyboardShortcutItem: Identifiable {
-    let id = UUID()
-    let keys: String
-    let label: String
 }
 
 struct WebPanelContainerView: NSViewRepresentable {

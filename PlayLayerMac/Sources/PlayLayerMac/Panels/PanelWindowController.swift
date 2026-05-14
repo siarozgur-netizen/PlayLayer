@@ -8,6 +8,7 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
     private let configService: ConfigService
     private var config: AppConfig
     private let runtimeState: PanelRuntimeState
+    private let shortcutsPanelWindowController = ShortcutsPanelWindowController()
     private var cancellables = Set<AnyCancellable>()
     private var lastVideoMode = false
     private var activeSpaceObserver: NSObjectProtocol?
@@ -143,8 +144,7 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func showGuide() {
-        runtimeState.requestGuide()
-        runtimeState.showActionFeedback(icon: "keyboard.fill", title: "Guide")
+        shortcutsPanelWindowController.showPanel()
     }
 
     func showActionFeedback(icon: String, title: String) {

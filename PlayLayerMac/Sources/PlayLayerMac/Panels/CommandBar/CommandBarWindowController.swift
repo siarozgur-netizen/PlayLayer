@@ -5,6 +5,7 @@ import SwiftUI
 final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
     private var actions: [CommandBarAction] = []
     private var isClosing = false
+    private var suppressNextResignKeyClose = false
 
     init() {
         let frame = CommandBarWindowController.defaultFrame()
@@ -35,8 +36,9 @@ final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func showCommandBar(actions: [CommandBarAction]) {
+    func showCommandBar(actions: [CommandBarAction], asHomeSurface: Bool = false) {
         self.actions = actions
+        suppressNextResignKeyClose = asHomeSurface
         applyRootView()
         guard let window else { return }
         window.setFrame(Self.defaultFrame(), display: true, animate: false)
@@ -65,6 +67,10 @@ final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
         _ = notification
+        if suppressNextResignKeyClose {
+            suppressNextResignKeyClose = false
+            return
+        }
         hideCommandBar()
     }
 

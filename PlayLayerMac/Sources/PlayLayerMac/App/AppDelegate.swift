@@ -47,15 +47,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var config = configService.load()
         config.overlayFullscreenEnabled = false
         config.interactModeEnabled = true
-        let shouldRestoreWorkspaceOnLaunch = hasRestorableWorkspaceSession(config.workspaceSession)
-
-        if shouldRestoreWorkspaceOnLaunch, let restoredWebPanel = config.workspaceSession?.webPanel {
-            config.panelHomeURL = restoredWebPanel.url
-            config.panelFrameX = restoredWebPanel.frame.x
-            config.panelFrameY = restoredWebPanel.frame.y
-            config.panelFrameWidth = restoredWebPanel.frame.width
-            config.panelFrameHeight = restoredWebPanel.frame.height
-        }
         configService.save(config)
         panelWindowController = PanelWindowController(config: config, configService: configService)
         trayService.install()
@@ -92,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        presentInitialWindows(restoreWorkspace: shouldRestoreWorkspaceOnLaunch, session: config.workspaceSession)
+        presentInitialWindows()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -105,7 +96,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard !flag else { return false }
 
-        restoreVisibleSurfacesIfNeeded()
+        if hiddenPanelSnapshot != nil {
+            restoreVisibleSurfacesIfNeeded()
+        } else {
+            showCommandBar(asHomeSurface: true)
+        }
         return true
     }
 
@@ -120,14 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelWindowController?.showOverlay()
     }
 
-    private func presentInitialWindows(restoreWorkspace: Bool, session: WorkspaceSession?) {
-        panelWindowController?.showOverlay(showFeedback: false)
-
-        if restoreWorkspace {
-            restoreWorkspacePanels(from: session)
-        }
-
-        showCommandBar()
+    private func presentInitialWindows() {
+        showCommandBar(asHomeSurface: true)
     }
 
     private func applyApplicationBranding() {
@@ -201,9 +190,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         commandBarWindowController.showCommandBar(actions: commandBarActions())
     }
 
-    private func hasRestorableWorkspaceSession(_ session: WorkspaceSession?) -> Bool {
-        guard let session else { return false }
-        return session.webPanel != nil || !session.imagePanels.isEmpty || !session.pdfPanels.isEmpty
+    private func showCommandBar(asHomeSurface: Bool) {
+        print("[Lumi][CommandBar] Opening command bar")
+        commandBarWindowController.showCommandBar(actions: commandBarActions(), asHomeSurface: asHomeSurface)
     }
 
     private func openSampleImagePanel() {

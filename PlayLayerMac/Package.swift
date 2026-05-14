@@ -9,7 +9,7 @@ let package = Package(
     ],
     products: [
         .executable(
-            name: "PlayLayerMac",
+            name: "Lumi",
             targets: ["PlayLayerMac"]
         ),
     ],

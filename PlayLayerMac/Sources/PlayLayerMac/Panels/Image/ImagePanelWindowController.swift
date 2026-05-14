@@ -26,7 +26,7 @@ final class ImagePanelWindowController: NSWindowController, NSWindowDelegate {
         )
 
         window.isReleasedWhenClosed = false
-        window.backgroundColor = .black
+        window.backgroundColor = PremiumPanelStyle.platformPanelSurfaceColor
         window.isOpaque = true
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -160,7 +160,7 @@ final class ImagePanelWindowController: NSWindowController, NSWindowDelegate {
     private func applyRootView() {
         let hostingView = NSHostingView(rootView: makeRootView(image: currentImage))
         hostingView.wantsLayer = true
-        hostingView.layer?.backgroundColor = NSColor.black.cgColor
+        hostingView.layer?.backgroundColor = PremiumPanelStyle.platformPanelSurfaceColor.cgColor
         window?.contentView = hostingView
     }
 

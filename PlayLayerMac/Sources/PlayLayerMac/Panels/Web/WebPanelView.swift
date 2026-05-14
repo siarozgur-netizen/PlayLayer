@@ -48,8 +48,8 @@ struct WebPanelView: View {
                     bridge: runtimeState.webPanelBridge,
                     isTheaterMode: runtimeState.isPlaybackLocked
                 )
+                    .integratedPanelContent(fillColor: PremiumPanelStyle.contentBedColor)
                     .padding(PremiumPanelStyle.contentInset + 1)
-                    .background(PremiumPanelStyle.contentBedColor)
 
                 PanelHoverTrackerView(isPointerInsidePanel: $isPointerInsidePanel)
                     .allowsHitTesting(false)
@@ -471,10 +471,10 @@ struct WebPanelContainerView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.wantsLayer = true
-        webView.layer?.backgroundColor = NSColor.black.cgColor
+        webView.layer?.backgroundColor = PremiumPanelStyle.platformContentBedColor.cgColor
         webView.setValue(true, forKey: "drawsBackground")
         if #available(macOS 15.0, *) {
-            webView.underPageBackgroundColor = .black
+            webView.underPageBackgroundColor = PremiumPanelStyle.platformContentBedColor
         }
         bridge.attach(webView)
         webView.load(URLRequest(url: URL(string: bridge.initialURLString)!))
@@ -749,7 +749,7 @@ final class WebPanelContainerNSView: NSView {
         self.webView = webView
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.black.cgColor
+        layer?.backgroundColor = PremiumPanelStyle.platformContentBedColor.cgColor
         layer?.cornerCurve = .continuous
         addSubview(webView)
     }

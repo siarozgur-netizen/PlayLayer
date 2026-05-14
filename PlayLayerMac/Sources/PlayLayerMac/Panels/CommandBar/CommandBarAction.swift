@@ -4,6 +4,7 @@ struct CommandBarAction: Identifiable {
     let id = UUID()
     let title: String
     let keywords: [String]
+    let shortcutHint: String?
     let handler: () -> Void
 
     func matches(_ query: String) -> Bool {

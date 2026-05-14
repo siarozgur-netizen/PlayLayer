@@ -14,8 +14,8 @@ struct PDFPanelView: View {
     var body: some View {
         ZStack(alignment: .top) {
             PDFDocumentContainerView(document: document)
+                .integratedPanelContent(fillColor: PremiumPanelStyle.contentBedColor)
                 .padding(PremiumPanelStyle.contentInset + 1)
-                .background(PremiumPanelStyle.contentBedColor)
 
             MinimalPanelHeader(
                 leading: {
@@ -66,7 +66,7 @@ private final class PDFPanelContentNSView: NSView {
         self.pdfView = pdfView
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1).cgColor
+        layer?.backgroundColor = PremiumPanelStyle.platformContentBedColor.cgColor
         layer?.cornerRadius = PremiumPanelStyle.contentCornerRadius
         layer?.masksToBounds = true
         addSubview(pdfView)

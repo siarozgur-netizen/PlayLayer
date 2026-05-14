@@ -1,112 +1,113 @@
+import AppKit
 import SwiftUI
 
 struct CommandBarView: View {
     let actions: [CommandBarAction]
     let executeAction: (CommandBarAction) -> Void
 
-    @State private var query = ""
     @State private var selectedIndex = 0
     @State private var hoveredIndex: Int?
     @State private var isHovered = false
-    @FocusState private var queryFieldFocused: Bool
 
-    private var filteredActions: [CommandBarAction] {
-        actions.filter { $0.matches(query) }
+    private var shortcutsAction: CommandBarAction? {
+        actions.first { $0.title == "Show Keyboard Shortcuts" }
+    }
+
+    private var launcherActions: [CommandBarAction] {
+        actions.filter { $0.title != "Show Keyboard Shortcuts" }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PremiumPanelStyle.headerTopPadding + 1) {
+        VStack(alignment: .leading, spacing: PremiumPanelStyle.headerTopPadding + 5) {
             CommandBarHeader()
 
-            VStack(spacing: PremiumPanelStyle.floatingChromeSpacing + 1) {
-                CommandBarSearchField(query: $query)
-                    .focused($queryFieldFocused)
-                    .onSubmit {
-                        executeSelectedAction()
-                    }
+            if let shortcutsAction {
+                CommandBarUtilityRow(action: shortcutsAction) {
+                    executeAction(shortcutsAction)
+                }
+            }
 
-                if filteredActions.isEmpty {
-                    CommandBarEmptyState(query: query)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                } else {
-                    ScrollView {
-                        VStack(spacing: PremiumPanelStyle.floatingChromeSpacing - 1) {
-                            ForEach(Array(filteredActions.enumerated()), id: \.element.id) { index, action in
-                                CommandBarRow(
-                                    action: action,
-                                    isSelected: index == selectedIndex,
-                                    isHovered: hoveredIndex == index
-                                ) {
-                                    hoveredIndex = index
-                                } onExit: {
-                                    if hoveredIndex == index {
-                                        hoveredIndex = nil
-                                    }
-                                } onTap: {
-                                    executeAction(action)
+            if launcherActions.isEmpty {
+                CommandBarEmptyState()
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            } else {
+                ScrollView {
+                    VStack(spacing: PremiumPanelStyle.floatingChromeSpacing + 3) {
+                        ForEach(Array(launcherActions.enumerated()), id: \.element.id) { index, action in
+                            CommandBarRow(
+                                action: action,
+                                isSelected: index == selectedIndex,
+                                isHovered: hoveredIndex == index
+                            ) {
+                                hoveredIndex = index
+                            } onExit: {
+                                if hoveredIndex == index {
+                                    hoveredIndex = nil
                                 }
+                            } onTap: {
+                                executeAction(action)
                             }
                         }
-                        .padding(.top, 2)
                     }
-                    .scrollIndicators(.hidden)
-                    .frame(maxHeight: 198)
-                    .transition(.opacity)
+                    .padding(.top, 4)
                 }
+                .scrollIndicators(.hidden)
+                .frame(maxHeight: 264)
+                .transition(.opacity)
             }
 
             CommandBarFooter()
         }
-        .padding(.horizontal, PremiumPanelStyle.cornerRadius - 1)
-        .padding(.vertical, PremiumPanelStyle.cornerRadius - 2)
+        .padding(.horizontal, PremiumPanelStyle.cornerRadius)
+        .padding(.vertical, PremiumPanelStyle.cornerRadius + 3)
         .frame(width: 462)
         .background(CommandBarBackdrop())
+        .background(
+            CommandBarKeyCaptureView(
+                onMoveUp: moveSelectionUp,
+                onMoveDown: moveSelectionDown,
+                onConfirm: executeSelectedAction,
+                onCancel: {}
+            )
+            .frame(width: 0, height: 0)
+        )
         .premiumPanelChrome(isActive: true, isHovered: isHovered, usesFilledSurface: true)
         .onHover { isHovered = $0 }
         .onAppear {
             selectedIndex = 0
             hoveredIndex = nil
-            DispatchQueue.main.async {
-                queryFieldFocused = true
-            }
         }
-        .onChange(of: query) { _ in
-            selectedIndex = 0
-            hoveredIndex = nil
-        }
-        .onChange(of: filteredActions.count) { newCount in
+        .onChange(of: launcherActions.count) { newCount in
             if newCount == 0 {
                 selectedIndex = 0
             } else {
                 selectedIndex = min(selectedIndex, newCount - 1)
             }
         }
-        .onMoveCommand { direction in
-            guard !filteredActions.isEmpty else { return }
-            switch direction {
-            case .down:
-                selectedIndex = min(selectedIndex + 1, filteredActions.count - 1)
-                hoveredIndex = nil
-            case .up:
-                selectedIndex = max(selectedIndex - 1, 0)
-                hoveredIndex = nil
-            default:
-                break
-            }
-        }
-        .animation(.easeOut(duration: PremiumPanelStyle.hoverAnimationDuration), value: query)
-        .animation(.easeOut(duration: PremiumPanelStyle.hoverAnimationDuration), value: filteredActions.count)
+        .animation(.easeOut(duration: PremiumPanelStyle.hoverAnimationDuration), value: launcherActions.count)
+    }
+
+    private func moveSelectionUp() {
+        guard !launcherActions.isEmpty else { return }
+        selectedIndex = max(selectedIndex - 1, 0)
+        hoveredIndex = nil
+    }
+
+    private func moveSelectionDown() {
+        guard !launcherActions.isEmpty else { return }
+        selectedIndex = min(selectedIndex + 1, launcherActions.count - 1)
+        hoveredIndex = nil
     }
 
     private func executeSelectedAction() {
-        guard filteredActions.indices.contains(selectedIndex) else { return }
-        executeAction(filteredActions[selectedIndex])
+        guard launcherActions.indices.contains(selectedIndex) else { return }
+        executeAction(launcherActions[selectedIndex])
     }
 }
 
 private struct CommandBarHeader: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 HStack(spacing: 8) {
                     LumiOrbView(size: 18, opacity: 0.94)
@@ -115,47 +116,63 @@ private struct CommandBarHeader: View {
                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.92))
                 }
+
                 Spacer()
+
                 Text("Ctrl + Option + L/Space")
                     .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.44))
+                    .foregroundStyle(.white.opacity(0.40))
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Search commands")
-                    .font(.system(size: 19, weight: .semibold, design: .rounded))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Actions")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.97))
 
-                Text("Panels, captures, files, and shortcuts")
+                Text("Keyboard-first workspace controls")
                     .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.50))
+                    .foregroundStyle(.white.opacity(0.48))
             }
         }
     }
 }
 
-private struct CommandBarSearchField: View {
-    @Binding var query: String
+private struct CommandBarUtilityRow: View {
+    let action: CommandBarAction
+    let onTap: () -> Void
 
     var body: some View {
-        HStack(spacing: PremiumPanelStyle.floatingChromeSpacing + 2) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.50))
+        Button(action: onTap) {
+            HStack(spacing: 11) {
+                Image(systemName: "keyboard")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.84))
+                    .frame(width: 28, height: 28)
+                    .background(Color.white.opacity(0.055))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
-            TextField("Type a command…", text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15.5, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.96))
+                Text(action.title)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+
+                Spacer()
+
+                if let shortcutHint = action.shortcutHint {
+                    Text(shortcutHint)
+                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.52))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color.white.opacity(0.035))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.058))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.065), lineWidth: 1)
-        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -169,10 +186,10 @@ private struct CommandBarRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
+            HStack(spacing: 13) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill((isSelected ? Color.white.opacity(0.11) : Color.white.opacity(0.04)))
+                        .fill(isSelected ? Color.white.opacity(0.11) : Color.white.opacity(0.04))
                         .frame(width: 34, height: 34)
 
                     Image(systemName: symbol)
@@ -180,7 +197,7 @@ private struct CommandBarRow: View {
                         .foregroundStyle(.white.opacity(0.9))
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(action.title)
                         .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.96))
@@ -188,20 +205,21 @@ private struct CommandBarRow: View {
 
                     Text(keywordText)
                         .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.50))
+                        .foregroundStyle(.white.opacity(0.48))
                         .lineLimit(1)
                 }
 
-                Spacer()
+                Spacer(minLength: 10)
 
-                if isSelected {
-                    Text("Enter")
+                if let shortcutHint = action.shortcutHint {
+                    Text(shortcutHint)
                         .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.62))
+                        .foregroundStyle(.white.opacity(isSelected ? 0.70 : 0.46))
+                        .frame(minWidth: 74, alignment: .trailing)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 12)
             .background(backgroundShape)
         }
         .buttonStyle(.plain)
@@ -211,40 +229,40 @@ private struct CommandBarRow: View {
     }
 
     private var backgroundShape: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: 15, style: .continuous)
             .fill(
                 isSelected
                 ? LinearGradient(
                     colors: [
-                        Color(red: 0.19, green: 0.43, blue: 0.68).opacity(0.70),
-                        Color(red: 0.14, green: 0.26, blue: 0.42).opacity(0.60)
+                        Color(red: 0.18, green: 0.40, blue: 0.63).opacity(0.62),
+                        Color(red: 0.13, green: 0.24, blue: 0.38).opacity(0.54)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 : LinearGradient(
                     colors: [
-                        Color.white.opacity(isHovered ? 0.065 : 0.04),
-                        Color.white.opacity(isHovered ? 0.035 : 0.022)
+                        Color.white.opacity(isHovered ? 0.058 : 0.036),
+                        Color.white.opacity(isHovered ? 0.030 : 0.018)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
                     .stroke(
                         isSelected
-                        ? Color.white.opacity(0.14)
-                        : Color.white.opacity(isHovered ? 0.065 : 0.04),
+                        ? Color.white.opacity(0.11)
+                        : Color.white.opacity(isHovered ? 0.054 : 0.034),
                         lineWidth: 1
                     )
             }
             .shadow(
-                color: .black.opacity(isSelected ? 0.14 : 0.06),
-                radius: isSelected ? 10 : 5,
+                color: .black.opacity(isSelected ? 0.11 : 0.05),
+                radius: isSelected ? 9 : 4,
                 x: 0,
-                y: isSelected ? 7 : 3
+                y: isSelected ? 6 : 3
             )
     }
 
@@ -264,27 +282,18 @@ private struct CommandBarRow: View {
 }
 
 private struct CommandBarEmptyState: View {
-    let query: String
-
     var body: some View {
         VStack(spacing: PremiumPanelStyle.floatingChromeSpacing + 2) {
-            Image(systemName: "magnifyingglass.circle")
-                .font(.system(size: 30, weight: .light))
-                .foregroundStyle(.white.opacity(0.58))
+            Image(systemName: "rectangle.stack.badge.minus")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.white.opacity(0.54))
 
-            Text("No matching actions")
+            Text("No actions available")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
-
-            if !query.isEmpty {
-                Text("Try a broader keyword like image, pdf, or capture")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.48))
-                    .multilineTextAlignment(.center)
-            }
+                .foregroundStyle(.white.opacity(0.90))
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
+        .padding(.vertical, 32)
         .background(Color.white.opacity(0.022))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
@@ -296,14 +305,17 @@ private struct CommandBarEmptyState: View {
 
 private struct CommandBarFooter: View {
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Text("↑ ↓ Move")
+            Text("·")
             Text("Enter Run")
+            Text("·")
             Text("Esc Close")
             Spacer()
         }
         .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-        .foregroundStyle(.white.opacity(0.44))
+        .foregroundStyle(.white.opacity(0.38))
+        .padding(.top, 2)
     }
 }
 
@@ -311,5 +323,77 @@ private struct CommandBarBackdrop: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 22, style: .continuous)
             .fill(Color.black.opacity(0.72))
+    }
+}
+
+private struct CommandBarKeyCaptureView: NSViewRepresentable {
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    func makeNSView(context: Context) -> CommandBarKeyCaptureNSView {
+        let view = CommandBarKeyCaptureNSView()
+        view.onMoveUp = onMoveUp
+        view.onMoveDown = onMoveDown
+        view.onConfirm = onConfirm
+        view.onCancel = onCancel
+        return view
+    }
+
+    func updateNSView(_ nsView: CommandBarKeyCaptureNSView, context: Context) {
+        _ = context
+        nsView.onMoveUp = onMoveUp
+        nsView.onMoveDown = onMoveDown
+        nsView.onConfirm = onConfirm
+        nsView.onCancel = onCancel
+        nsView.scheduleFocus()
+    }
+}
+
+@MainActor
+private final class CommandBarKeyCaptureNSView: NSView {
+    var onMoveUp: (() -> Void)?
+    var onMoveDown: (() -> Void)?
+    var onConfirm: (() -> Void)?
+    var onCancel: (() -> Void)?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        scheduleFocus()
+    }
+
+    func scheduleFocus() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window, window.firstResponder !== self else { return }
+            window.makeFirstResponder(self)
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 125:
+            onMoveDown?()
+        case 126:
+            onMoveUp?()
+        case 36, 76:
+            onConfirm?()
+        case 53:
+            onCancel?()
+            window?.cancelOperation(nil)
+        default:
+            super.keyDown(with: event)
+        }
     }
 }

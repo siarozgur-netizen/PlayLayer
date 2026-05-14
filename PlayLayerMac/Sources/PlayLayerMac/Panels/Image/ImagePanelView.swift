@@ -16,8 +16,7 @@ struct ImagePanelView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(PremiumPanelStyle.contentBedColor)
-                .clipShape(RoundedRectangle(cornerRadius: PremiumPanelStyle.contentCornerRadius, style: .continuous))
+                .integratedPanelContent(fillColor: PremiumPanelStyle.contentBedColor)
 
             MinimalPanelHeader(
                 leading: {

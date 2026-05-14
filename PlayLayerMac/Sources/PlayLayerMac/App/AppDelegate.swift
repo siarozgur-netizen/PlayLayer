@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = notification
+        applyApplicationBranding()
 
         if !launchGuardService.acquire() {
             let reason = launchGuardService.lastFailureReason ?? "unknown launch guard failure"
@@ -99,6 +100,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        _ = sender
+
+        guard !flag else { return false }
+
+        restoreVisibleSurfacesIfNeeded()
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         _ = notification
         saveWorkspaceSession()
@@ -118,6 +128,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         showCommandBar()
+    }
+
+    private func applyApplicationBranding() {
+        guard
+            let orbURL = Bundle.module.url(forResource: "LumiOrb", withExtension: "png"),
+            let orbImage = NSImage(contentsOf: orbURL)
+        else {
+            return
+        }
+
+        NSApplication.shared.applicationIconImage = orbImage
     }
 
     private func hideOverlay() {
@@ -141,24 +162,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             panelWindowController.hideOverlay()
         } else {
-            panelWindowController.showOverlay()
-
-            if let hiddenPanelSnapshot {
-                for panelID in hiddenPanelSnapshot.imagePanelIDs {
-                    imagePanelWindowControllers[panelID]?.showPanel()
-                }
-
-                for panelID in hiddenPanelSnapshot.pdfPanelIDs {
-                    pdfPanelWindowControllers[panelID]?.showPanel()
-                }
-
-                if hiddenPanelSnapshot.commandBarVisible {
-                    commandBarWindowController.showCommandBar(actions: commandBarActions())
-                }
-
-                self.hiddenPanelSnapshot = nil
-            }
+            restoreVisibleSurfacesIfNeeded()
         }
+    }
+
+    private func restoreVisibleSurfacesIfNeeded() {
+        guard let panelWindowController else { return }
+
+        panelWindowController.showOverlay(showFeedback: false)
+
+        guard let hiddenPanelSnapshot else { return }
+
+        for panelID in hiddenPanelSnapshot.imagePanelIDs {
+            imagePanelWindowControllers[panelID]?.showPanel()
+        }
+
+        for panelID in hiddenPanelSnapshot.pdfPanelIDs {
+            pdfPanelWindowControllers[panelID]?.showPanel()
+        }
+
+        if hiddenPanelSnapshot.commandBarVisible {
+            commandBarWindowController.showCommandBar(actions: commandBarActions())
+        }
+
+        self.hiddenPanelSnapshot = nil
     }
 
     private func returnToHome() {
@@ -570,43 +597,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         [
             CommandBarAction(
                 title: "Open YouTube Overlay",
-                keywords: ["youtube", "overlay", "web", "show"]
+                keywords: ["youtube", "overlay", "web", "show"],
+                shortcutHint: "Ctrl Opt O"
             ) { [weak self] in
                 self?.showOverlay()
             },
             CommandBarAction(
                 title: "Open Image Panel...",
-                keywords: ["image", "photo", "png", "jpg"]
+                keywords: ["image", "photo", "png", "jpg"],
+                shortcutHint: nil
             ) { [weak self] in
                 self?.openImagePanel()
             },
             CommandBarAction(
                 title: "Open PDF Panel...",
-                keywords: ["pdf", "document", "file"]
+                keywords: ["pdf", "document", "file"],
+                shortcutHint: nil
             ) { [weak self] in
                 self?.openPDFPanel()
             },
             CommandBarAction(
                 title: "Capture Screen to Panel",
-                keywords: ["capture", "screen", "screenshot", "full"]
+                keywords: ["capture", "screen", "screenshot", "full"],
+                shortcutHint: nil
             ) { [weak self] in
                 self?.captureScreenToPanel()
             },
             CommandBarAction(
                 title: "Capture Area to Panel",
-                keywords: ["capture", "area", "selection", "crop"]
+                keywords: ["capture", "area", "selection", "crop"],
+                shortcutHint: "Ctrl Opt 2"
             ) { [weak self] in
                 self?.captureAreaToPanel()
             },
             CommandBarAction(
                 title: "Show Keyboard Shortcuts",
-                keywords: ["help", "shortcuts", "keys", "guide"]
+                keywords: ["help", "shortcuts", "keys", "guide"],
+                shortcutHint: "Ctrl Opt C"
             ) { [weak self] in
                 self?.showGuide()
             },
             CommandBarAction(
                 title: "Quit Lumi",
-                keywords: ["quit", "exit", "close app"]
+                keywords: ["quit", "exit", "close app"],
+                shortcutHint: "Cmd Q"
             ) {
                 NSApplication.shared.terminate(nil)
             },

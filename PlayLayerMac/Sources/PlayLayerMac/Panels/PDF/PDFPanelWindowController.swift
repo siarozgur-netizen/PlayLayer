@@ -27,7 +27,7 @@ final class PDFPanelWindowController: NSWindowController, NSWindowDelegate {
         )
 
         window.isReleasedWhenClosed = false
-        window.backgroundColor = .black
+        window.backgroundColor = PremiumPanelStyle.platformPanelSurfaceColor
         window.isOpaque = true
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -129,7 +129,7 @@ final class PDFPanelWindowController: NSWindowController, NSWindowDelegate {
     private func applyRootView() {
         let hostingView = NSHostingView(rootView: makeRootView(document: currentDocument))
         hostingView.wantsLayer = true
-        hostingView.layer?.backgroundColor = NSColor.black.cgColor
+        hostingView.layer?.backgroundColor = PremiumPanelStyle.platformPanelSurfaceColor.cgColor
         window?.contentView = hostingView
     }
 

@@ -85,7 +85,7 @@ final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
     private static func defaultFrame() -> CGRect {
         let visibleFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         let width: CGFloat = 462
-        let height: CGFloat = 314
+        let height: CGFloat = 388
         let x = visibleFrame.midX - (width / 2)
         let y = visibleFrame.maxY - height - 72
         return CGRect(x: x, y: y, width: width, height: height)

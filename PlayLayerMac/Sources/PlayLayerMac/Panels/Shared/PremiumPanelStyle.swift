@@ -2,9 +2,9 @@ import AppKit
 import SwiftUI
 
 enum PremiumPanelStyle {
-    static let cornerRadius: CGFloat = 18
-    static let contentInset: CGFloat = 2
-    static let contentCornerRadius: CGFloat = 16.5
+    static let cornerRadius: CGFloat = 17
+    static let contentInset: CGFloat = 1.5
+    static let contentCornerRadius: CGFloat = 15.5
     static let floatingChromePadding: CGFloat = 7
     static let floatingChromeSpacing: CGFloat = 8
     static let headerHorizontalPadding: CGFloat = 11
@@ -19,27 +19,31 @@ enum PremiumPanelStyle {
     static let hoverAnimationDuration: Double = 0.12
     static let activeAnimationDuration: Double = 0.16
     static let dragAnimationDuration: Double = 0.10
-    static let chromeBorderOpacity: Double = 0.06
+    static let chromeBorderOpacity: Double = 0.05
     static let iconButtonBorderOpacity: Double = 0.07
     static let badgeFillOpacity: Double = 0.30
     static let chromeFillOpacity: Double = 0.22
     static let iconButtonFillOpacity: Double = 0.40
-    static let filledSurfaceActiveOpacity: Double = 0.68
-    static let filledSurfaceInactiveOpacity: Double = 0.63
-    static let defaultShadowOpacity: Double = 0.11
-    static let hoverShadowOpacity: Double = 0.13
-    static let activeShadowOpacity: Double = 0.16
-    static let dragShadowOpacity: Double = 0.20
-    static let defaultShadowRadius: CGFloat = 24
-    static let hoverShadowRadius: CGFloat = 28
-    static let activeShadowRadius: CGFloat = 32
-    static let dragShadowRadius: CGFloat = 36
-    static let defaultShadowYOffset: CGFloat = 12
-    static let hoverShadowYOffset: CGFloat = 14
-    static let activeShadowYOffset: CGFloat = 16
-    static let dragShadowYOffset: CGFloat = 20
-    static let panelSurfaceColor = Color(red: 0.050, green: 0.052, blue: 0.058)
-    static let contentBedColor = Color(red: 0.042, green: 0.044, blue: 0.050)
+    static let filledSurfaceActiveOpacity: Double = 0.66
+    static let filledSurfaceInactiveOpacity: Double = 0.62
+    static let defaultShadowOpacity: Double = 0.095
+    static let hoverShadowOpacity: Double = 0.115
+    static let activeShadowOpacity: Double = 0.135
+    static let dragShadowOpacity: Double = 0.17
+    static let defaultShadowRadius: CGFloat = 28
+    static let hoverShadowRadius: CGFloat = 32
+    static let activeShadowRadius: CGFloat = 36
+    static let dragShadowRadius: CGFloat = 40
+    static let defaultShadowYOffset: CGFloat = 10
+    static let hoverShadowYOffset: CGFloat = 12
+    static let activeShadowYOffset: CGFloat = 14
+    static let dragShadowYOffset: CGFloat = 18
+    static let contentEdgeShadowOpacity: Double = 0.17
+    static let contentEdgeHighlightOpacity: Double = 0.05
+    static let panelSurfaceColor = Color(red: 0.055, green: 0.057, blue: 0.063)
+    static let contentBedColor = Color(red: 0.060, green: 0.062, blue: 0.070)
+    static let platformPanelSurfaceColor = NSColor(calibratedRed: 0.055, green: 0.057, blue: 0.063, alpha: 1.0)
+    static let platformContentBedColor = NSColor(calibratedRed: 0.060, green: 0.062, blue: 0.070, alpha: 1.0)
 }
 
 struct FloatingPanelBadge: View {
@@ -398,13 +402,13 @@ struct PremiumPanelChromeModifier: ViewModifier {
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: isActive ? 1.0 : 0.85
+                        lineWidth: isActive ? 0.9 : 0.75
                     )
                     .padding(PremiumPanelStyle.contentInset)
             }
             .overlay {
                 shape
-                    .stroke(Color.white.opacity(isActive ? 0.045 : 0.022), lineWidth: 0.7)
+                    .stroke(Color.white.opacity(isActive ? 0.034 : 0.018), lineWidth: 0.55)
                     .padding(PremiumPanelStyle.contentInset)
             }
             .shadow(
@@ -420,34 +424,34 @@ struct PremiumPanelChromeModifier: ViewModifier {
 
     private var borderLeadColor: Color {
         if isDragging {
-            return Color(red: 0.60, green: 0.86, blue: 1.0).opacity(0.58)
+            return Color(red: 0.60, green: 0.86, blue: 1.0).opacity(0.48)
         }
 
         if isActive {
-            return Color.white.opacity(0.18)
+            return Color.white.opacity(0.12)
         }
 
         if isHovered {
-            return Color.white.opacity(0.10)
+            return Color.white.opacity(0.075)
         }
 
-        return Color.white.opacity(0.06)
+        return Color.white.opacity(0.045)
     }
 
     private var borderTrailColor: Color {
         if isDragging {
-            return Color.white.opacity(0.16)
+            return Color.white.opacity(0.12)
         }
 
         if isActive {
-            return Color.white.opacity(0.08)
-        }
-
-        if isHovered {
             return Color.white.opacity(0.05)
         }
 
-        return Color.white.opacity(0.02)
+        if isHovered {
+            return Color.white.opacity(0.035)
+        }
+
+        return Color.white.opacity(0.015)
     }
 
     private var shadowOpacity: Double {
@@ -472,8 +476,45 @@ struct PremiumPanelChromeModifier: ViewModifier {
     }
 }
 
+struct PanelContentIntegrationModifier: ViewModifier {
+    let fillColor: Color?
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: PremiumPanelStyle.contentCornerRadius, style: .continuous)
+
+        content
+            .clipShape(shape)
+            .background {
+                if let fillColor {
+                    shape.fill(fillColor)
+                }
+            }
+            .overlay {
+                shape
+                    .stroke(Color.white.opacity(0.024), lineWidth: 0.6)
+            }
+            .overlay {
+                shape
+                    .stroke(Color.black.opacity(PremiumPanelStyle.contentEdgeShadowOpacity), lineWidth: 5.5)
+                    .blur(radius: 4.5)
+                    .mask(shape)
+            }
+            .overlay {
+                shape
+                    .stroke(Color.white.opacity(PremiumPanelStyle.contentEdgeHighlightOpacity), lineWidth: 1.4)
+                    .blur(radius: 1.2)
+                    .mask(shape)
+                    .opacity(0.72)
+            }
+    }
+}
+
 extension View {
     func premiumPanelChrome(isActive: Bool, isHovered: Bool = false, isDragging: Bool = false, usesFilledSurface: Bool = false) -> some View {
         modifier(PremiumPanelChromeModifier(isActive: isActive, isHovered: isHovered, isDragging: isDragging, usesFilledSurface: usesFilledSurface))
+    }
+
+    func integratedPanelContent(fillColor: Color? = PremiumPanelStyle.contentBedColor) -> some View {
+        modifier(PanelContentIntegrationModifier(fillColor: fillColor))
     }
 }

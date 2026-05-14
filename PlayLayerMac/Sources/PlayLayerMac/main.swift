@@ -1,5 +1,6 @@
 import AppKit
 
+ProcessInfo.processInfo.processName = "Lumi"
 let app = NSApplication.shared
 let delegate = AppDelegate()
 

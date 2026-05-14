@@ -43,18 +43,18 @@ final class TrayService {
 
     func install() {
         statusItem.button?.title = "▶︎"
-        statusItem.button?.toolTip = "PlayLayer"
+        statusItem.button?.toolTip = "Lumi"
         statusItem.menu = buildMenu()
     }
 
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
 
-        let titleItem = NSMenuItem(title: "PlayLayer", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "Lumi", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
 
-        let subtitleItem = NSMenuItem(title: "Gaming video overlay", action: nil, keyEquivalent: "")
+        let subtitleItem = NSMenuItem(title: "Ambient workspace overlay", action: nil, keyEquivalent: "")
         subtitleItem.isEnabled = false
         menu.addItem(subtitleItem)
 
@@ -72,7 +72,7 @@ final class TrayService {
         menu.addItem(makeItem("Interact Mode", action: #selector(onInteractMode), shortcut: "overlay input"))
         menu.addItem(makeItem("Exit Theater", action: #selector(onHome), shortcut: "Ctrl Opt T / H"))
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit PlayLayer", action: #selector(onQuit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit Lumi", action: #selector(onQuit), keyEquivalent: "q")
         menu.items.forEach { $0.target = self }
         return menu
     }

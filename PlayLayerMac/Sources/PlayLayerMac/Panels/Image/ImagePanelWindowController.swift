@@ -10,6 +10,7 @@ final class ImagePanelWindowController: NSWindowController, NSWindowDelegate {
     private var currentImage: NSImage
     private var isActive = false
     private var isClosingPanel = false
+    private var hostingView: NSHostingView<ImagePanelView>?
 
     init(opacity: Double, isInteractive: Bool, image: NSImage, sourceURL: URL? = nil, initialFrame: CGRect, closeObserver: @escaping () -> Void) {
         self.opacity = opacity
@@ -26,7 +27,7 @@ final class ImagePanelWindowController: NSWindowController, NSWindowDelegate {
         )
 
         window.isReleasedWhenClosed = false
-        window.backgroundColor = PremiumPanelStyle.platformPanelSurfaceColor
+        window.backgroundColor = PremiumPanelStyle.platformContentBedColor
         window.isOpaque = true
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -158,10 +159,18 @@ final class ImagePanelWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func applyRootView() {
-        let hostingView = NSHostingView(rootView: makeRootView(image: currentImage))
+        let rootView = makeRootView(image: currentImage)
+
+        if let hostingView {
+            hostingView.rootView = rootView
+            return
+        }
+
+        let hostingView = NSHostingView(rootView: rootView)
         hostingView.wantsLayer = true
-        hostingView.layer?.backgroundColor = PremiumPanelStyle.platformPanelSurfaceColor.cgColor
+        hostingView.layer?.backgroundColor = PremiumPanelStyle.platformContentBedColor.cgColor
         window?.contentView = hostingView
+        self.hostingView = hostingView
     }
 
     private func makeRootView(image: NSImage) -> ImagePanelView {

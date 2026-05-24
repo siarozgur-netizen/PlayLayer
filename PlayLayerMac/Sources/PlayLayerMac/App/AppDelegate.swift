@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private struct HiddenPanelSnapshot {
+        let youtubePanelVisible: Bool
+        let googlePanelVisible: Bool
         let imagePanelIDs: Set<UUID>
         let pdfPanelIDs: Set<UUID>
         let commandBarVisible: Bool
@@ -17,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let panelLayoutService = PanelLayoutService()
     private lazy var trayService = TrayService(
         toggleOverlayHandler: { [weak self] in self?.toggleOverlay() },
+        openGoogleOverlayHandler: { [weak self] in self?.openGoogleOverlay() },
         returnToHomeHandler: { [weak self] in self?.returnToHome() },
         showGuideHandler: { [weak self] in self?.showGuide() },
         captureAreaToPanelHandler: { [weak self] in self?.captureAreaToPanel() },
@@ -29,11 +32,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitHandler: { NSApplication.shared.terminate(nil) }
     )
     private var panelWindowController: PanelWindowController?
+    private var googlePanelWindowController: PanelWindowController?
+    private weak var activeWebPanelWindowController: PanelWindowController?
     private let commandBarWindowController = CommandBarWindowController()
+    private let shortcutsPanelWindowController = ShortcutsPanelWindowController()
     private var imagePanelWindowControllers: [UUID: ImagePanelWindowController] = [:]
     private var pdfPanelWindowControllers: [UUID: PDFPanelWindowController] = [:]
     private var areaSelectionWindowController: AreaSelectionWindowController?
     private var hiddenPanelSnapshot: HiddenPanelSnapshot?
+
+    private var activeOrPrimaryWebPanelController: PanelWindowController? {
+        if let activeWebPanelWindowController, activeWebPanelWindowController.isOverlayVisible {
+            return activeWebPanelWindowController
+        }
+
+        if googlePanelWindowController?.isOverlayVisible == true {
+            return googlePanelWindowController
+        }
+
+        return panelWindowController
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = notification
@@ -48,29 +66,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         config.overlayFullscreenEnabled = false
         config.interactModeEnabled = true
         configService.save(config)
-        panelWindowController = PanelWindowController(config: config, configService: configService)
+        let initialYouTubeURL = WebPanelDefaults.title(for: config.panelHomeURL) == WebPanelDefaults.youtubePreset.title
+            ? config.panelHomeURL
+            : WebPanelDefaults.youtubePreset.url
+
+        panelWindowController = makeWebPanelController(
+            homeURL: WebPanelDefaults.youtubePreset.url,
+            initialURL: initialYouTubeURL
+        )
         trayService.install()
         hotkeyService.registerDefaultHotkeys(
             toggleTheaterModeHandler: { [weak self] in
-                self?.panelWindowController?.toggleTheaterMode()
+                self?.activeOrPrimaryWebPanelController?.toggleTheaterMode()
             },
             returnToHomeHandler: { [weak self] in
-                self?.panelWindowController?.returnToHome()
+                self?.activeOrPrimaryWebPanelController?.returnToHome()
             },
             toggleOverlayVisibilityHandler: { [weak self] in
                 self?.toggleOverlay()
             },
             showGuideHandler: { [weak self] in
-                self?.panelWindowController?.showGuide()
+                self?.showGuide()
             },
             togglePlaybackHandler: { [weak self] in
-                self?.panelWindowController?.togglePlayback()
+                self?.activeOrPrimaryWebPanelController?.togglePlayback()
             },
             seekBackwardHandler: { [weak self] in
-                self?.panelWindowController?.seekBackward()
+                self?.activeOrPrimaryWebPanelController?.seekBackward()
             },
             seekForwardHandler: { [weak self] in
-                self?.panelWindowController?.seekForward()
+                self?.activeOrPrimaryWebPanelController?.seekForward()
             },
             openSampleImagePanelHandler: { [weak self] in
                 self?.openSampleImagePanel()
@@ -109,10 +134,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         saveWorkspaceSession()
         hotkeyService.unregisterAllHotkeys()
         panelWindowController?.stopObservingSpaces()
+        googlePanelWindowController?.stopObservingSpaces()
     }
 
     private func showOverlay() {
-        panelWindowController?.showOverlay()
+        ensureYouTubePanelController().showOverlay()
+    }
+
+    private func makeWebPanelController(homeURL: String, initialURL: String? = nil) -> PanelWindowController {
+        var config = configService.load()
+        config.panelHomeURL = homeURL
+
+        var controller: PanelWindowController!
+        controller = PanelWindowController(
+            config: config,
+            configService: configService,
+            homeURL: homeURL,
+            initialURL: initialURL
+        ) { [weak self] in
+            self?.activeWebPanelWindowController = controller
+        }
+
+        return controller
+    }
+
+    private func makeGooglePanelInitialFrame() -> CGRect {
+        let browseSize = panelLayoutService.browseFrame().size
+        return panelLayoutService.nextAuxiliaryPanelFrame(
+            size: browseSize,
+            intent: .guide,
+            avoiding: visiblePanelFrames(),
+            focusArea: panelWindowController?.currentFrame,
+            cursorLocation: NSEvent.mouseLocation
+        )
+    }
+
+    private func ensureYouTubePanelController() -> PanelWindowController {
+        if let panelWindowController {
+            return panelWindowController
+        }
+
+        let controller = makeWebPanelController(homeURL: WebPanelDefaults.youtubePreset.url)
+        panelWindowController = controller
+        return controller
+    }
+
+    private func ensureGooglePanelController() -> PanelWindowController {
+        if let googlePanelWindowController {
+            return googlePanelWindowController
+        }
+
+        var config = configService.load()
+        config.panelHomeURL = WebPanelDefaults.googlePreset.url
+
+        var controller: PanelWindowController!
+        controller = PanelWindowController(
+            config: config,
+            configService: configService,
+            homeURL: WebPanelDefaults.googlePreset.url,
+            initialURL: WebPanelDefaults.googlePreset.url,
+            initialFrame: makeGooglePanelInitialFrame()
+        ) { [weak self] in
+            self?.activeWebPanelWindowController = controller
+        }
+        googlePanelWindowController = controller
+        return controller
+    }
+
+    private func openYouTubeOverlay() {
+        ensureYouTubePanelController().showOverlay()
+    }
+
+    private func openGoogleOverlay() {
+        ensureGooglePanelController().showOverlay()
     }
 
     private func presentInitialWindows() {
@@ -132,13 +226,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func hideOverlay() {
         panelWindowController?.hideOverlay()
+        googlePanelWindowController?.hideOverlay()
     }
 
     private func toggleOverlay() {
-        guard let panelWindowController else { return }
+        let youtubePanelVisible = panelWindowController?.isOverlayVisible == true
+        let googlePanelVisible = googlePanelWindowController?.isOverlayVisible == true
 
-        if panelWindowController.isOverlayVisible {
+        if youtubePanelVisible || googlePanelVisible {
             hiddenPanelSnapshot = HiddenPanelSnapshot(
+                youtubePanelVisible: youtubePanelVisible,
+                googlePanelVisible: googlePanelVisible,
                 imagePanelIDs: Set(imagePanelWindowControllers.compactMap { $0.value.isPanelVisible ? $0.key : nil }),
                 pdfPanelIDs: Set(pdfPanelWindowControllers.compactMap { $0.value.isPanelVisible ? $0.key : nil }),
                 commandBarVisible: commandBarWindowController.isCommandBarVisible
@@ -149,18 +247,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if commandBarWindowController.isCommandBarVisible {
                 commandBarWindowController.hideCommandBar()
             }
-            panelWindowController.hideOverlay()
+            panelWindowController?.hideOverlay()
+            googlePanelWindowController?.hideOverlay()
         } else {
-            restoreVisibleSurfacesIfNeeded()
+            if hiddenPanelSnapshot != nil {
+                restoreVisibleSurfacesIfNeeded()
+            } else {
+                showOverlay()
+            }
         }
     }
 
     private func restoreVisibleSurfacesIfNeeded() {
-        guard let panelWindowController else { return }
+        guard let hiddenPanelSnapshot else {
+            showOverlay()
+            return
+        }
 
-        panelWindowController.showOverlay(showFeedback: false)
+        if hiddenPanelSnapshot.youtubePanelVisible {
+            ensureYouTubePanelController().showOverlay(showFeedback: false)
+        }
 
-        guard let hiddenPanelSnapshot else { return }
+        if hiddenPanelSnapshot.googlePanelVisible {
+            ensureGooglePanelController().showOverlay(showFeedback: false)
+        }
 
         for panelID in hiddenPanelSnapshot.imagePanelIDs {
             imagePanelWindowControllers[panelID]?.showPanel()
@@ -171,28 +281,125 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if hiddenPanelSnapshot.commandBarVisible {
-            commandBarWindowController.showCommandBar(actions: commandBarActions())
+            commandBarWindowController.showCommandBar(
+                actions: commandBarActions(),
+                commandExecutor: { [weak self] command in
+                    self?.executeCommand(command) ?? false
+                }
+            )
         }
 
         self.hiddenPanelSnapshot = nil
     }
 
     private func returnToHome() {
-        panelWindowController?.returnToHome()
+        activeOrPrimaryWebPanelController?.returnToHome()
     }
 
     private func showGuide() {
-        panelWindowController?.showGuide()
+        if shortcutsPanelWindowController.isPanelVisible {
+            shortcutsPanelWindowController.hidePanel()
+            return
+        }
+
+        shortcutsPanelWindowController.showPanel(
+            avoiding: visiblePanelFrames(),
+            focusArea: nil
+        )
     }
 
     private func showCommandBar() {
         print("[Lumi][CommandBar] Opening command bar")
-        commandBarWindowController.showCommandBar(actions: commandBarActions())
+        commandBarWindowController.showCommandBar(
+            actions: commandBarActions(),
+            commandExecutor: { [weak self] command in
+                self?.executeCommand(command) ?? false
+            }
+        )
     }
 
     private func showCommandBar(asHomeSurface: Bool) {
         print("[Lumi][CommandBar] Opening command bar")
-        commandBarWindowController.showCommandBar(actions: commandBarActions(), asHomeSurface: asHomeSurface)
+        commandBarWindowController.showCommandBar(
+            actions: commandBarActions(),
+            commandExecutor: { [weak self] command in
+                self?.executeCommand(command) ?? false
+            },
+            asHomeSurface: asHomeSurface
+        )
+    }
+
+    private func executeCommand(_ rawCommand: String) -> Bool {
+        executeCommandIntent(CommandParser.parse(rawCommand))
+    }
+
+    private func executeCommandIntent(_ intent: CommandIntent) -> Bool {
+        switch intent {
+        case .unknown:
+            return false
+        case let .openPreset(name):
+            return openPresetCommand(named: name)
+        case let .openURL(url):
+            return openDirectURL(url)
+        case let .youtubeSearch(query):
+            ensureYouTubePanelController().openURL(
+                WebPanelDefaults.youtubeSearchURL(for: query),
+                feedbackIcon: "play.tv.fill",
+                feedbackTitle: "YouTube Search"
+            )
+            return true
+        case let .imageSearch(query):
+            ensureGooglePanelController().openURL(
+                WebPanelDefaults.googleImageSearchURL(for: query),
+                feedbackIcon: "photo.on.rectangle.angled",
+                feedbackTitle: "Image Search"
+            )
+            return true
+        case let .webSearch(query):
+            ensureGooglePanelController().openURL(
+                WebPanelDefaults.googleSearchURL(for: query),
+                feedbackIcon: "magnifyingglass",
+                feedbackTitle: "Web Search"
+            )
+            return true
+        }
+    }
+
+    private func openPresetCommand(named name: String) -> Bool {
+        guard let preset = WebPanelDefaults.preset(named: name) else {
+            return false
+        }
+
+        switch preset.title {
+        case WebPanelDefaults.googlePreset.title:
+            ensureGooglePanelController().openPreset(preset)
+        case WebPanelDefaults.youtubePreset.title:
+            ensureYouTubePanelController().openPreset(preset)
+        default:
+            ensureGooglePanelController().openPreset(preset)
+        }
+
+        return true
+    }
+
+    private func openDirectURL(_ url: URL) -> Bool {
+        let controller: PanelWindowController
+        let feedbackTitle: String
+
+        if WebPanelDefaults.isYouTubeURL(url) {
+            controller = ensureYouTubePanelController()
+            feedbackTitle = "Opened URL"
+        } else {
+            controller = ensureGooglePanelController()
+            feedbackTitle = WebPanelDefaults.isGoogleURL(url) ? "Google" : "Opened URL"
+        }
+
+        controller.openURL(
+            url.absoluteString,
+            feedbackIcon: "globe",
+            feedbackTitle: feedbackTitle
+        )
+        return true
     }
 
     private func openSampleImagePanel() {
@@ -222,7 +429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let image = NSImage(contentsOf: selectedURL) else {
             print("[Lumi][ImagePanel] Failed to load image at path: \(selectedURL.path)")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Image Load Failed")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Image Load Failed")
             return
         }
 
@@ -252,7 +459,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let document = PDFDocument(url: selectedURL) else {
             print("[Lumi][PDFPanel] Failed to load PDF at path: \(selectedURL.path)")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "PDF Load Failed")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "PDF Load Failed")
             return
         }
 
@@ -268,13 +475,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func captureScreenToPanel() {
         guard CGPreflightScreenCaptureAccess() else {
             print("[Lumi][Capture] Screen capture permission not granted")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Screen Capture Blocked")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Screen Capture Blocked")
             return
         }
 
         guard let capture = CGDisplayCreateImage(CGMainDisplayID()) else {
             print("[Lumi][Capture] Failed to capture main display image")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
             return
         }
 
@@ -284,7 +491,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             with: image,
             spawnIntent: .screenshot,
             sourceURL: nil,
-            focusArea: panelWindowController?.currentFrame,
+            focusArea: activeOrPrimaryWebPanelController?.currentFrame,
             feedbackIcon: "camera.fill",
             feedbackTitle: "Screen Panel",
             logMessage: "[Lumi][Capture] Opened screen capture panel"
@@ -294,7 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func captureAreaToPanel() {
         guard CGPreflightScreenCaptureAccess() else {
             print("[Lumi][Capture] Screen capture permission not granted for area selection")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Screen Capture Blocked")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Screen Capture Blocked")
             return
         }
 
@@ -308,7 +515,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let selectionScreen else {
             print("[Lumi][Capture] No screen available for area selection")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
             return
         }
 
@@ -326,7 +533,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         areaSelectionWindowController = controller
         print("[Lumi][Capture] Started area selection on screen \(selectionScreen.frame.debugDescription)")
-        panelWindowController?.showActionFeedback(icon: "selection.pin.in.out", title: "Select Area")
+        activeOrPrimaryWebPanelController?.showActionFeedback(icon: "selection.pin.in.out", title: "Select Area")
         controller.showSelectionOverlay()
     }
 
@@ -363,7 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         imagePanelWindowControllers[panelID] = controller
         controller.showPanel()
         print("\(logMessage) \(panelID.uuidString)")
-        panelWindowController?.showActionFeedback(icon: feedbackIcon, title: feedbackTitle)
+        activeOrPrimaryWebPanelController?.showActionFeedback(icon: feedbackIcon, title: feedbackTitle)
         saveWorkspaceSession()
     }
 
@@ -397,21 +604,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pdfPanelWindowControllers[panelID] = controller
         controller.showPanel()
         print("\(logMessage) \(panelID.uuidString)")
-        panelWindowController?.showActionFeedback(icon: feedbackIcon, title: feedbackTitle)
+        activeOrPrimaryWebPanelController?.showActionFeedback(icon: feedbackIcon, title: feedbackTitle)
         saveWorkspaceSession()
     }
 
     private func captureAreaRectToPanel(_ selectedRect: CGRect, on screen: NSScreen) {
         guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
             print("[Lumi][Capture] Missing screen number for area selection capture")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
             return
         }
 
         let displayID = CGDirectDisplayID(screenNumber.uint32Value)
         guard let fullCapture = CGDisplayCreateImage(displayID) else {
             print("[Lumi][Capture] Failed to capture source display image for area selection")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
             return
         }
 
@@ -434,7 +641,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let croppedCapture = fullCapture.cropping(to: cropRect) else {
             print("[Lumi][Capture] Failed to crop selected area \(cropRect.debugDescription)")
-            panelWindowController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
+            activeOrPrimaryWebPanelController?.showActionFeedback(icon: "exclamationmark.triangle.fill", title: "Capture Failed")
             return
         }
 
@@ -453,12 +660,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setPassMode() {
         panelWindowController?.setInteractMode(false)
+        googlePanelWindowController?.setInteractMode(false)
         imagePanelWindowControllers.values.forEach { $0.setInteractive(false) }
         pdfPanelWindowControllers.values.forEach { $0.setInteractive(false) }
     }
 
     private func setInteractMode() {
         panelWindowController?.setInteractMode(true)
+        googlePanelWindowController?.setInteractMode(true)
         imagePanelWindowControllers.values.forEach { $0.setInteractive(true) }
         pdfPanelWindowControllers.values.forEach { $0.setInteractive(true) }
     }
@@ -467,6 +676,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var frames: [CGRect] = []
 
         if let frame = panelWindowController?.currentFrame, panelWindowController?.isOverlayVisible == true {
+            frames.append(frame)
+        }
+
+        if let frame = googlePanelWindowController?.currentFrame, googlePanelWindowController?.isOverlayVisible == true {
             frames.append(frame)
         }
 
@@ -486,11 +699,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var config = configService.load()
         config.panelHomeURL = panelWindowController.currentURLString
 
-        let webPanelSession = RestorableWebPanelSession(
-            url: panelWindowController.currentURLString,
-            frame: PanelFrameRecord(frame: panelWindowController.currentFrame ?? panelLayoutService.browseFrame()),
-            opacity: config.opacity
-        )
+        let visibleWebPanels: [RestorableWebPanelSession] = [
+            panelWindowController.isOverlayVisible
+            ? RestorableWebPanelSession(
+                    url: panelWindowController.currentURLString,
+                    homeURL: WebPanelDefaults.youtubePreset.url,
+                    frame: PanelFrameRecord(frame: panelWindowController.currentFrame ?? panelLayoutService.browseFrame()),
+                    opacity: config.opacity
+                )
+            : nil,
+            googlePanelWindowController.flatMap { controller in
+                guard controller.isOverlayVisible else { return nil }
+                return RestorableWebPanelSession(
+                    url: controller.currentURLString,
+                    homeURL: WebPanelDefaults.googlePreset.url,
+                    frame: PanelFrameRecord(frame: controller.currentFrame ?? panelLayoutService.browseFrame()),
+                    opacity: config.opacity
+                )
+            }
+        ].compactMap { $0 }
 
         let imagePanels = imagePanelWindowControllers.values.compactMap { controller -> RestorableFilePanelSession? in
             guard
@@ -525,7 +752,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         config.workspaceSession = WorkspaceSession(
-            webPanel: webPanelSession,
+            webPanels: visibleWebPanels,
             imagePanels: imagePanels,
             pdfPanels: pdfPanels
         )
@@ -586,10 +813,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         [
             CommandBarAction(
                 title: "Open YouTube Overlay",
-                keywords: ["youtube", "overlay", "web", "show"],
+                keywords: ["youtube", "overlay", "web", "show", "open youtube"],
                 shortcutHint: "Ctrl Opt O"
             ) { [weak self] in
-                self?.showOverlay()
+                self?.openYouTubeOverlay()
+            },
+            CommandBarAction(
+                title: "Open Google",
+                keywords: ["google", "open google", "search", "web"],
+                shortcutHint: nil
+            ) { [weak self] in
+                self?.openGoogleOverlay()
             },
             CommandBarAction(
                 title: "Open Image Panel...",

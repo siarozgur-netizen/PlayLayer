@@ -49,8 +49,12 @@ final class WebPanelBridge: ObservableObject {
         onOverlayFullscreenRequested?()
     }
 
-    func navigateHome() {
-        navigate(to: WebPanelDefaults.homeURL)
+    func navigateHome(to urlString: String) {
+        navigate(to: urlString)
+    }
+
+    func goBack() {
+        webView?.goBack()
     }
 
     func reload() {

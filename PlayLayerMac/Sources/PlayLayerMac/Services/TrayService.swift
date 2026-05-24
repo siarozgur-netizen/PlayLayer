@@ -4,6 +4,7 @@ import AppKit
 final class TrayService {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let toggleOverlayHandler: () -> Void
+    private let openGoogleOverlayHandler: () -> Void
     private let returnToHomeHandler: () -> Void
     private let showGuideHandler: () -> Void
     private let captureAreaToPanelHandler: () -> Void
@@ -17,6 +18,7 @@ final class TrayService {
 
     init(
         toggleOverlayHandler: @escaping () -> Void,
+        openGoogleOverlayHandler: @escaping () -> Void,
         returnToHomeHandler: @escaping () -> Void,
         showGuideHandler: @escaping () -> Void,
         captureAreaToPanelHandler: @escaping () -> Void,
@@ -29,6 +31,7 @@ final class TrayService {
         quitHandler: @escaping () -> Void
     ) {
         self.toggleOverlayHandler = toggleOverlayHandler
+        self.openGoogleOverlayHandler = openGoogleOverlayHandler
         self.returnToHomeHandler = returnToHomeHandler
         self.showGuideHandler = showGuideHandler
         self.captureAreaToPanelHandler = captureAreaToPanelHandler
@@ -60,6 +63,7 @@ final class TrayService {
 
         menu.addItem(.separator())
         menu.addItem(makeItem("Toggle Overlay", action: #selector(onToggleOverlay), shortcut: "Ctrl Opt O"))
+        menu.addItem(makeItem("Open Google", action: #selector(onOpenGoogleOverlay), shortcut: ""))
         menu.addItem(makeItem("Home", action: #selector(onHome), shortcut: "Ctrl Opt H"))
         menu.addItem(makeItem("Show Guide", action: #selector(onGuide), shortcut: "Ctrl Opt C"))
         menu.addItem(makeItem("Capture Area to Panel", action: #selector(onCaptureAreaToPanel), shortcut: ""))
@@ -86,6 +90,11 @@ final class TrayService {
     @objc
     private func onToggleOverlay() {
         toggleOverlayHandler()
+    }
+
+    @objc
+    private func onOpenGoogleOverlay() {
+        openGoogleOverlayHandler()
     }
 
     @objc

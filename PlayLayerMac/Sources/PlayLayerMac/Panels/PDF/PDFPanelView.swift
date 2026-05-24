@@ -14,7 +14,13 @@ struct PDFPanelView: View {
     var body: some View {
         ZStack(alignment: .top) {
             PDFDocumentContainerView(document: document)
-                .integratedPanelContent(fillColor: PremiumPanelStyle.contentBedColor)
+                .integratedPanelContent(
+                    fillColor: PremiumPanelStyle.contentBedColor,
+                    cornerSofteningOpacity: 0,
+                    cornerRadius: 16.9,
+                    edgeShadowOpacity: 0.05,
+                    edgeHighlightOpacity: 0.032
+                )
                 .padding(PremiumPanelStyle.contentInset + 1)
 
             MinimalPanelHeader(
@@ -29,7 +35,8 @@ struct PDFPanelView: View {
                     }
                 },
                 isDragging: $isDragging,
-                visible: isHovered || isActive
+                isActive: isActive,
+                isHovered: isHovered
             )
         }
         .background(PremiumPanelStyle.contentBedColor)

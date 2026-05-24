@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
     private var actions: [CommandBarAction] = []
+    private var commandExecutor: ((String) -> Bool)?
     private var isClosing = false
     private var suppressNextResignKeyClose = false
 
@@ -22,6 +23,7 @@ final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
         window.hasShadow = true
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.isMovableByWindowBackground = true
 
         super.init(window: window)
         window.delegate = self
@@ -36,8 +38,13 @@ final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func showCommandBar(actions: [CommandBarAction], asHomeSurface: Bool = false) {
+    func showCommandBar(
+        actions: [CommandBarAction],
+        commandExecutor: ((String) -> Bool)? = nil,
+        asHomeSurface: Bool = false
+    ) {
         self.actions = actions
+        self.commandExecutor = commandExecutor
         suppressNextResignKeyClose = asHomeSurface
         applyRootView()
         guard let window else { return }
@@ -75,9 +82,17 @@ final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func applyRootView() {
-        let hostingView = NSHostingView(rootView: CommandBarView(actions: actions) { [weak self] action in
-            self?.execute(action)
-        })
+        let hostingView = CommandBarHostingView(
+            rootView: CommandBarView(
+                actions: actions,
+                executeAction: { [weak self] action in
+                    self?.execute(action)
+                },
+                executeCommand: { [weak self] command in
+                    self?.executeCommand(command) ?? false
+                }
+            )
+        )
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         window?.contentView = hostingView
@@ -88,14 +103,27 @@ final class CommandBarWindowController: NSWindowController, NSWindowDelegate {
         action.handler()
     }
 
+    private func executeCommand(_ command: String) -> Bool {
+        let didExecute = commandExecutor?(command) ?? false
+        if didExecute {
+            hideCommandBar()
+        }
+        return didExecute
+    }
+
     private static func defaultFrame() -> CGRect {
         let visibleFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let width: CGFloat = 462
-        let height: CGFloat = 388
+        let width: CGFloat = min(820, visibleFrame.width - 56)
+        let height: CGFloat = 228
         let x = visibleFrame.midX - (width / 2)
-        let y = visibleFrame.maxY - height - 72
+        let y = visibleFrame.minY + 34
         return CGRect(x: x, y: y, width: width, height: height)
     }
+}
+
+@MainActor
+private final class CommandBarHostingView: NSHostingView<CommandBarView> {
+    override var mouseDownCanMoveWindow: Bool { true }
 }
 
 @MainActor

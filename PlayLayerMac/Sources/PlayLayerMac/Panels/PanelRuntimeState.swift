@@ -6,6 +6,7 @@ final class PanelRuntimeState: ObservableObject {
     @Published var isVideoMode: Bool
     @Published var isPlaybackLocked: Bool
     @Published var isOverlayFullscreen: Bool
+    @Published var isPanelFocused: Bool
     @Published var actionFeedback: ActionFeedback?
     @Published var theaterTransitionID: Int
     let webPanelBridge: WebPanelBridge
@@ -15,6 +16,7 @@ final class PanelRuntimeState: ObservableObject {
         self.isVideoMode = false
         self.isPlaybackLocked = false
         self.isOverlayFullscreen = isOverlayFullscreen
+        self.isPanelFocused = false
         self.actionFeedback = nil
         self.theaterTransitionID = 0
         self.webPanelBridge = WebPanelBridge()

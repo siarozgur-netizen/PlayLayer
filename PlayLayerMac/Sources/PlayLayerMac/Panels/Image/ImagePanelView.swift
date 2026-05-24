@@ -16,7 +16,13 @@ struct ImagePanelView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .integratedPanelContent(fillColor: PremiumPanelStyle.contentBedColor)
+                .integratedPanelContent(
+                    fillColor: PremiumPanelStyle.contentBedColor,
+                    cornerSofteningOpacity: 0,
+                    cornerRadius: 16.8,
+                    edgeShadowOpacity: 0.055,
+                    edgeHighlightOpacity: 0.034
+                )
 
             MinimalPanelHeader(
                 leading: {
@@ -30,7 +36,8 @@ struct ImagePanelView: View {
                     }
                 },
                 isDragging: $isDragging,
-                visible: isHovered || isActive
+                isActive: isActive,
+                isHovered: isHovered
             )
         }
         .background(PremiumPanelStyle.contentBedColor)

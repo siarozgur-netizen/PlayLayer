@@ -11,6 +11,7 @@ final class PDFPanelWindowController: NSWindowController, NSWindowDelegate {
     private var currentDocument: PDFDocument
     private var isActive = false
     private var isClosingPanel = false
+    private var hostingView: NSHostingView<PDFPanelView>?
 
     init(opacity: Double, isInteractive: Bool, document: PDFDocument, sourceURL: URL? = nil, initialFrame: CGRect, closeObserver: @escaping () -> Void) {
         self.opacity = opacity
@@ -27,7 +28,7 @@ final class PDFPanelWindowController: NSWindowController, NSWindowDelegate {
         )
 
         window.isReleasedWhenClosed = false
-        window.backgroundColor = PremiumPanelStyle.platformPanelSurfaceColor
+        window.backgroundColor = PremiumPanelStyle.platformContentBedColor
         window.isOpaque = true
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -127,10 +128,18 @@ final class PDFPanelWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func applyRootView() {
-        let hostingView = NSHostingView(rootView: makeRootView(document: currentDocument))
+        let rootView = makeRootView(document: currentDocument)
+
+        if let hostingView {
+            hostingView.rootView = rootView
+            return
+        }
+
+        let hostingView = NSHostingView(rootView: rootView)
         hostingView.wantsLayer = true
-        hostingView.layer?.backgroundColor = PremiumPanelStyle.platformPanelSurfaceColor.cgColor
+        hostingView.layer?.backgroundColor = PremiumPanelStyle.platformContentBedColor.cgColor
         window?.contentView = hostingView
+        self.hostingView = hostingView
     }
 
     private func makeRootView(document: PDFDocument) -> PDFPanelView {

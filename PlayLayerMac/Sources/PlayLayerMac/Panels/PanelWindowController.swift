@@ -7,22 +7,33 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
     private let layoutService = PanelLayoutService()
     private let configService: ConfigService
     private var config: AppConfig
+    private let homeURL: String
     private let runtimeState: PanelRuntimeState
+    private let onDidBecomeActive: (() -> Void)?
     private let shortcutsPanelWindowController = ShortcutsPanelWindowController()
     private var cancellables = Set<AnyCancellable>()
     private var lastVideoMode = false
     private var activeSpaceObserver: NSObjectProtocol?
     private var pendingSpaceRecoveryWorkItem: DispatchWorkItem?
 
-    init(config: AppConfig, configService: ConfigService) {
+    init(
+        config: AppConfig,
+        configService: ConfigService,
+        homeURL: String? = nil,
+        initialURL: String? = nil,
+        initialFrame: CGRect? = nil,
+        onDidBecomeActive: (() -> Void)? = nil
+    ) {
         self.config = config
         self.configService = configService
+        self.homeURL = homeURL ?? config.panelHomeURL
+        self.onDidBecomeActive = onDidBecomeActive
         self.runtimeState = PanelRuntimeState(
             isOverlayFullscreen: false
         )
-        self.runtimeState.webPanelBridge.initialURLString = config.panelHomeURL
+        self.runtimeState.webPanelBridge.initialURLString = initialURL ?? self.homeURL
 
-        let frame = Self.savedBrowseFrame(from: config) ?? layoutService.browseFrame()
+        let frame = initialFrame ?? Self.savedBrowseFrame(from: config) ?? layoutService.browseFrame()
         let window = PanelWindow(
             contentRect: frame,
             styleMask: [.borderless, .resizable],
@@ -42,11 +53,15 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
         window.isMovableByWindowBackground = false
         window.minSize = NSSize(width: 420, height: 260)
         window.maxSize = Self.maximumWebPanelSize()
+        window.title = WebPanelDefaults.title(for: self.homeURL)
 
         super.init(window: window)
         window.delegate = self
         let rootView = WebPanelView(
             runtimeState: runtimeState,
+            onNavigateBack: { [weak self] in self?.navigateBack() },
+            onNavigateHome: { [weak self] in self?.returnToHome() },
+            onToggleTheater: { [weak self] in self?.toggleTheaterMode() },
             onReload: { [weak self] in self?.reloadWebContent() },
             onOpenInBrowser: { [weak self] in self?.openCurrentURLInBrowser() },
             onCopyURL: { [weak self] in self?.copyCurrentURL() },
@@ -76,9 +91,42 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func showOverlay(showFeedback: Bool = true) {
+        updateWindowTitle(for: currentURLString)
         presentOverlay(activateApp: true)
         if showFeedback {
             runtimeState.showActionFeedback(icon: "eye.fill", title: "Shown")
+        }
+    }
+
+    func openPreset(_ preset: WebPanelDefaults.Preset, showFeedback: Bool = true) {
+        runtimeState.isPlaybackLocked = false
+        runtimeState.isOverlayFullscreen = false
+        runtimeState.webPanelBridge.navigate(to: preset.url)
+        updateWindowTitle(for: preset.url)
+        presentOverlay(activateApp: true)
+
+        if showFeedback {
+            runtimeState.showActionFeedback(icon: preset.feedbackIcon, title: preset.title)
+        }
+    }
+
+    func openURL(
+        _ urlString: String,
+        feedbackIcon: String = "globe",
+        feedbackTitle: String? = nil,
+        showFeedback: Bool = true
+    ) {
+        runtimeState.isPlaybackLocked = false
+        runtimeState.isOverlayFullscreen = false
+        runtimeState.webPanelBridge.navigate(to: urlString)
+        updateWindowTitle(for: urlString)
+        presentOverlay(activateApp: true)
+
+        if showFeedback {
+            runtimeState.showActionFeedback(
+                icon: feedbackIcon,
+                title: feedbackTitle ?? WebPanelDefaults.title(for: urlString)
+            )
         }
     }
 
@@ -144,7 +192,20 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func showGuide() {
-        shortcutsPanelWindowController.showPanel()
+        if shortcutsPanelWindowController.isPanelVisible {
+            shortcutsPanelWindowController.hidePanel()
+            return
+        }
+
+        var existingFrames: [CGRect] = []
+        if let currentFrame, isOverlayVisible {
+            existingFrames.append(currentFrame)
+        }
+
+        shortcutsPanelWindowController.showPanel(
+            avoiding: existingFrames,
+            focusArea: nil
+        )
     }
 
     func showActionFeedback(icon: String, title: String) {
@@ -164,6 +225,12 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
     func seekForward() {
         runtimeState.webPanelBridge.seek(by: 10)
         runtimeState.showActionFeedback(icon: "goforward.10", title: "+10s")
+    }
+
+    private func navigateBack() {
+        runtimeState.isOverlayFullscreen = false
+        runtimeState.webPanelBridge.goBack()
+        runtimeState.showActionFeedback(icon: "chevron.backward", title: "Back")
     }
 
     private func reloadWebContent() {
@@ -201,7 +268,8 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
     func returnToHome() {
         runtimeState.isPlaybackLocked = false
         runtimeState.isOverlayFullscreen = false
-        runtimeState.webPanelBridge.navigateHome()
+        runtimeState.webPanelBridge.navigateHome(to: homeURL)
+        updateWindowTitle(for: homeURL)
         applyLayoutForCurrentMode()
         runtimeState.showActionFeedback(icon: "house.fill", title: "Home")
     }
@@ -329,9 +397,24 @@ final class PanelWindowController: NSWindowController, NSWindowDelegate {
         window.ignoresMouseEvents = !config.interactModeEnabled
     }
 
+    private func updateWindowTitle(for urlString: String) {
+        window?.title = WebPanelDefaults.title(for: urlString)
+    }
+
     func windowDidMove(_ notification: Notification) {
         _ = notification
         persistCurrentBrowseFrameIfNeeded()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        _ = notification
+        runtimeState.isPanelFocused = true
+        onDidBecomeActive?()
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        _ = notification
+        runtimeState.isPanelFocused = false
     }
 
     func windowDidEndLiveResize(_ notification: Notification) {

@@ -6,17 +6,20 @@ final class PanelLayoutService {
         case genericImage
         case screenshot
         case pdf
+        case guide
     }
 
-    private let browseWidthRatio: CGFloat = 0.30
-    private let theaterWidthRatio: CGFloat = 0.32
+    private let browseWidthRatio: CGFloat = 0.28
+    private let theaterWidthRatio: CGFloat = 0.30
     private let browseAspectRatio: CGFloat = 16.0 / 10.0
     private let theaterAspectRatio: CGFloat = 16.0 / 9.0
-    private let horizontalMarginRatio: CGFloat = 0.03
-    private let verticalMarginRatio: CGFloat = 0.03
-    private let imagePanelCascadeOffset: CGFloat = 24
-    private let imagePanelCascadeSteps = 6
-    private let auxiliaryPanelMargin: CGFloat = 18
+    private let horizontalMarginRatio: CGFloat = 0.035
+    private let verticalMarginRatio: CGFloat = 0.035
+    private let imagePanelCascadeOffsetX: CGFloat = 30
+    private let imagePanelCascadeOffsetY: CGFloat = 18
+    private let imagePanelCascadeSteps = 7
+    private let auxiliaryPanelMargin: CGFloat = 24
+    private let preferredPanelGap: CGFloat = 34
     private var nextImagePanelCascadeIndex = 0
 
     func browseFrame() -> CGRect {
@@ -29,10 +32,10 @@ final class PanelLayoutService {
 
     func imagePanelFrame() -> CGRect {
         let screen = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1728, height: 1117)
-        let width = screen.width * 0.22
+        let width = min(screen.width * 0.18, 340)
         let height = width / (16.0 / 10.0)
-        let leftMargin = screen.width * 0.04
-        let topMargin = screen.height * verticalMarginRatio
+        let leftMargin = screen.width * 0.05
+        let topMargin = screen.height * 0.05
         let x = screen.minX + leftMargin
         let y = screen.maxY - topMargin - height
 
@@ -54,8 +57,8 @@ final class PanelLayoutService {
             return fallbackSize
         }
 
-        let maxWidth = min(screen.width * 0.46, 980)
-        let maxHeight = min(screen.height * 0.58, 780)
+        let maxWidth = min(screen.width * 0.36, 760)
+        let maxHeight = min(screen.height * 0.50, 640)
         let widthScale = maxWidth / naturalWidth
         let heightScale = maxHeight / naturalHeight
         let downscale = min(widthScale, heightScale, 1.0)
@@ -64,13 +67,13 @@ final class PanelLayoutService {
         var height = naturalHeight * downscale
 
         let aspectRatio = naturalWidth / naturalHeight
-        if width < 140 || height < 110 {
+        if width < 126 || height < 96 {
             if aspectRatio >= 1 {
-                height = max(110, height)
-                width = max(140, height * aspectRatio)
+                height = max(96, height)
+                width = max(126, height * aspectRatio)
             } else {
-                width = max(110, width)
-                height = max(140, width / aspectRatio)
+                width = max(96, width)
+                height = max(126, width / aspectRatio)
             }
         }
 
@@ -81,8 +84,14 @@ final class PanelLayoutService {
     }
 
     func pdfPanelSpawnSize() -> CGSize {
-        let baseSize = imagePanelSpawnSize()
-        return CGSize(width: baseSize.width * 1.22, height: baseSize.height * 1.26)
+        let screen = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1728, height: 1117)
+        let width = min(max(screen.width * 0.24, 400), 500)
+        let height = min(max(width * 1.36, 540), min(screen.height * 0.62, 700))
+        return CGSize(width: width.rounded(.up), height: height.rounded(.up))
+    }
+
+    func guidePanelSpawnSize() -> CGSize {
+        CGSize(width: 408, height: 336)
     }
 
     func nextImagePanelFrame() -> CGRect {
@@ -91,8 +100,8 @@ final class PanelLayoutService {
         let cascadeIndex = nextImagePanelCascadeIndex
         nextImagePanelCascadeIndex = (nextImagePanelCascadeIndex + 1) % imagePanelCascadeSteps
 
-        let offsetX = CGFloat(cascadeIndex) * imagePanelCascadeOffset
-        let offsetY = CGFloat(cascadeIndex) * imagePanelCascadeOffset
+        let offsetX = CGFloat(cascadeIndex) * imagePanelCascadeOffsetX
+        let offsetY = CGFloat(cascadeIndex) * imagePanelCascadeOffsetY
         let width = baseFrame.width
         let height = baseFrame.height
         let minX = screen.minX + 12
@@ -222,15 +231,50 @@ final class PanelLayoutService {
                     height: size.height
                 )
             )
+            candidates.append(
+                CGRect(
+                    x: focusArea.midX - (size.width / 2),
+                    y: focusArea.minY - auxiliaryPanelMargin - size.height,
+                    width: size.width,
+                    height: size.height
+                )
+            )
         }
+
+        let lowerRight = CGRect(
+            x: screen.maxX - auxiliaryPanelMargin - size.width,
+            y: screen.minY + auxiliaryPanelMargin,
+            width: size.width,
+            height: size.height
+        )
+        let centerLeft = CGRect(
+            x: screen.minX + auxiliaryPanelMargin,
+            y: screen.midY - (size.height / 2),
+            width: size.width,
+            height: size.height
+        )
+        let upperCenter = CGRect(
+            x: screen.midX - (size.width / 2),
+            y: screen.maxY - auxiliaryPanelMargin - size.height,
+            width: size.width,
+            height: size.height
+        )
+        let lowerCenter = CGRect(
+            x: screen.midX - (size.width / 2),
+            y: screen.minY + auxiliaryPanelMargin,
+            width: size.width,
+            height: size.height
+        )
 
         switch intent {
         case .screenshot:
-            candidates.append(contentsOf: [topRight, centerRight, topLeft, lowerLeft])
+            candidates.append(contentsOf: [topRight, centerRight, centerLeft, lowerRight, topLeft, lowerLeft])
         case .pdf:
-            candidates.append(contentsOf: [centerRight, topRight, topLeft, lowerLeft])
+            candidates.append(contentsOf: [centerRight, centerLeft, lowerRight, topRight, lowerLeft, upperCenter])
         case .genericImage:
-            candidates.append(contentsOf: [topLeft, topRight, centerRight, lowerLeft])
+            candidates.append(contentsOf: [topLeft, centerLeft, topRight, lowerLeft, centerRight, lowerCenter])
+        case .guide:
+            candidates.append(contentsOf: [topLeft, centerLeft, upperCenter, lowerLeft, topRight, lowerCenter])
         }
 
         return candidates
@@ -239,6 +283,12 @@ final class PanelLayoutService {
     private func spawnScore(for frame: CGRect, existingFrames: [CGRect], cursorLocation: CGPoint?) -> CGFloat {
         let overlapPenalty = existingFrames.reduce(CGFloat.zero) { partial, existingFrame in
             partial + (frame.intersection(existingFrame).isNull ? 0 : frame.intersection(existingFrame).area)
+        }
+
+        let proximityPenalty = existingFrames.reduce(CGFloat.zero) { partial, existingFrame in
+            let gap = frameGap(between: frame, and: existingFrame)
+            guard gap < preferredPanelGap else { return partial }
+            return partial + ((preferredPanelGap - gap) * 520)
         }
 
         let cursorPenalty: CGFloat
@@ -250,7 +300,7 @@ final class PanelLayoutService {
             cursorPenalty = 0
         }
 
-        return overlapPenalty + cursorPenalty
+        return overlapPenalty + proximityPenalty + cursorPenalty
     }
 
     private func constrainedFrame(_ frame: CGRect, within visibleFrame: CGRect) -> CGRect {
@@ -297,4 +347,28 @@ private extension CGRect {
     func withSize(_ size: CGSize) -> CGRect {
         CGRect(x: origin.x, y: origin.y, width: size.width, height: size.height)
     }
+}
+
+private func frameGap(between lhs: CGRect, and rhs: CGRect) -> CGFloat {
+    let dx: CGFloat
+    if lhs.maxX < rhs.minX {
+        dx = rhs.minX - lhs.maxX
+    } else if rhs.maxX < lhs.minX {
+        dx = lhs.minX - rhs.maxX
+    } else {
+        dx = 0
+    }
+
+    let dy: CGFloat
+    if lhs.maxY < rhs.minY {
+        dy = rhs.minY - lhs.maxY
+    } else if rhs.maxY < lhs.minY {
+        dy = lhs.minY - rhs.maxY
+    } else {
+        dy = 0
+    }
+
+    if dx == 0 { return dy }
+    if dy == 0 { return dx }
+    return hypot(dx, dy)
 }

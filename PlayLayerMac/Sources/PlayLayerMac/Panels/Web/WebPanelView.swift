@@ -3,6 +3,9 @@ import WebKit
 
 struct WebPanelView: View {
     @ObservedObject var runtimeState: PanelRuntimeState
+    let onNavigateBack: () -> Void
+    let onNavigateHome: () -> Void
+    let onToggleTheater: () -> Void
     let onReload: () -> Void
     let onOpenInBrowser: () -> Void
     let onCopyURL: () -> Void
@@ -19,12 +22,18 @@ struct WebPanelView: View {
 
     init(
         runtimeState: PanelRuntimeState,
+        onNavigateBack: @escaping () -> Void = {},
+        onNavigateHome: @escaping () -> Void = {},
+        onToggleTheater: @escaping () -> Void = {},
         onReload: @escaping () -> Void = {},
         onOpenInBrowser: @escaping () -> Void = {},
         onCopyURL: @escaping () -> Void = {},
         onClose: @escaping () -> Void = {}
     ) {
         self.runtimeState = runtimeState
+        self.onNavigateBack = onNavigateBack
+        self.onNavigateHome = onNavigateHome
+        self.onToggleTheater = onToggleTheater
         self.onReload = onReload
         self.onOpenInBrowser = onOpenInBrowser
         self.onCopyURL = onCopyURL
@@ -32,7 +41,29 @@ struct WebPanelView: View {
     }
 
     private var showsControlDock: Bool {
+        isPointerInsidePanel || isPointerOverControlDock || runtimeState.isPanelFocused
+    }
+
+    private var isControlDockInteractive: Bool {
         isPointerInsidePanel || isPointerOverControlDock
+    }
+
+    private var controlDockOpacity: Double {
+        if isPointerInsidePanel || isPointerOverControlDock { return 0.96 }
+        if runtimeState.isPanelFocused { return 0.42 }
+        return 0
+    }
+
+    private var controlDockScale: CGFloat {
+        if isPointerInsidePanel || isPointerOverControlDock { return 1 }
+        if runtimeState.isPanelFocused { return 0.985 }
+        return 0.96
+    }
+
+    private var controlDockOffsetY: CGFloat {
+        if isPointerInsidePanel || isPointerOverControlDock { return -8 }
+        if runtimeState.isPanelFocused { return -4 }
+        return -28
     }
 
     var body: some View {
@@ -70,20 +101,29 @@ struct WebPanelView: View {
                 }
             }
             .background(Color.clear)
-            .premiumPanelChrome(isActive: true, isHovered: isPointerInsidePanel, isDragging: isDragging, usesFilledSurface: true)
+            .premiumPanelChrome(
+                isActive: runtimeState.isPanelFocused,
+                isHovered: isPointerInsidePanel,
+                isDragging: isDragging,
+                usesFilledSurface: true
+            )
 
             WebPanelControlDock(
                 isDragging: $isDragging,
+                isTheaterMode: runtimeState.isPlaybackLocked,
+                onNavigateBack: onNavigateBack,
+                onNavigateHome: onNavigateHome,
+                onToggleTheater: onToggleTheater,
                 onReload: onReload,
                 onOpenInBrowser: onOpenInBrowser,
                 onCopyURL: onCopyURL,
                 onClose: onClose
             )
             .onHover { isPointerOverControlDock = $0 }
-            .opacity(showsControlDock ? 1 : 0)
-            .scaleEffect(showsControlDock ? 1 : 0.96, anchor: .top)
-            .allowsHitTesting(showsControlDock)
-            .offset(y: showsControlDock ? -12 : -54)
+            .opacity(controlDockOpacity)
+            .scaleEffect(controlDockScale, anchor: .top)
+            .allowsHitTesting(isControlDockInteractive)
+            .offset(y: controlDockOffsetY)
         }
         .animation(.easeOut(duration: 0.16), value: showsStartupHint)
         .animation(.easeOut(duration: 0.14), value: visibleFeedback)
@@ -152,6 +192,10 @@ struct WebPanelView: View {
 
 private struct WebPanelControlDock: View {
     @Binding var isDragging: Bool
+    let isTheaterMode: Bool
+    let onNavigateBack: () -> Void
+    let onNavigateHome: () -> Void
+    let onToggleTheater: () -> Void
     let onReload: () -> Void
     let onOpenInBrowser: () -> Void
     let onCopyURL: () -> Void
@@ -159,6 +203,15 @@ private struct WebPanelControlDock: View {
 
     var body: some View {
         HStack(spacing: PremiumPanelStyle.floatingChromeSpacing + 2) {
+            FloatingPanelChromeContainer {
+                FloatingPanelIconButton(icon: "chevron.backward", action: onNavigateBack)
+                FloatingPanelIconButton(icon: "house.fill", action: onNavigateHome)
+                FloatingPanelIconButton(
+                    icon: isTheaterMode ? "rectangle.compress.vertical" : "rectangle.expand.vertical",
+                    action: onToggleTheater
+                )
+            }
+
             ZStack {
                 PanelDragSurfaceView(isDragging: $isDragging)
                     .frame(width: 152, height: 34)
@@ -166,10 +219,10 @@ private struct WebPanelControlDock: View {
                 FloatingPanelChromeContainer {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.76))
-                    Text("Move Window")
+                        .foregroundStyle(.white.opacity(0.68))
+                    Text("Move")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.88))
+                        .foregroundStyle(.white.opacity(0.80))
                 }
                 .allowsHitTesting(false)
             }
@@ -181,7 +234,7 @@ private struct WebPanelControlDock: View {
                 FloatingTrafficLightCloseButton(action: onClose)
             }
         }
-        .padding(.top, 6)
+        .padding(.top, 3)
     }
 }
 

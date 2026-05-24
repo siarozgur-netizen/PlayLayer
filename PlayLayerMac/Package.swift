@@ -20,5 +20,9 @@ let package = Package(
                 .process("Resources"),
             ]
         ),
+        .testTarget(
+            name: "PlayLayerMacTests",
+            dependencies: ["PlayLayerMac"]
+        ),
     ],
 )

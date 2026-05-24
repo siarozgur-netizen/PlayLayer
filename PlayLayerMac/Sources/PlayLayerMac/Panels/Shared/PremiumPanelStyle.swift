@@ -19,24 +19,24 @@ enum PremiumPanelStyle {
     static let hoverAnimationDuration: Double = 0.12
     static let activeAnimationDuration: Double = 0.16
     static let dragAnimationDuration: Double = 0.10
-    static let chromeBorderOpacity: Double = 0.05
-    static let iconButtonBorderOpacity: Double = 0.07
-    static let badgeFillOpacity: Double = 0.30
-    static let chromeFillOpacity: Double = 0.22
-    static let iconButtonFillOpacity: Double = 0.40
-    static let filledSurfaceActiveOpacity: Double = 0.66
-    static let filledSurfaceInactiveOpacity: Double = 0.62
-    static let defaultShadowOpacity: Double = 0.095
-    static let hoverShadowOpacity: Double = 0.115
-    static let activeShadowOpacity: Double = 0.135
+    static let chromeBorderOpacity: Double = 0.032
+    static let iconButtonBorderOpacity: Double = 0.05
+    static let badgeFillOpacity: Double = 0.20
+    static let chromeFillOpacity: Double = 0.145
+    static let iconButtonFillOpacity: Double = 0.24
+    static let filledSurfaceActiveOpacity: Double = 0.68
+    static let filledSurfaceInactiveOpacity: Double = 0.56
+    static let defaultShadowOpacity: Double = 0.072
+    static let hoverShadowOpacity: Double = 0.092
+    static let activeShadowOpacity: Double = 0.148
     static let dragShadowOpacity: Double = 0.17
-    static let defaultShadowRadius: CGFloat = 28
-    static let hoverShadowRadius: CGFloat = 32
-    static let activeShadowRadius: CGFloat = 36
+    static let defaultShadowRadius: CGFloat = 24
+    static let hoverShadowRadius: CGFloat = 28
+    static let activeShadowRadius: CGFloat = 38
     static let dragShadowRadius: CGFloat = 40
-    static let defaultShadowYOffset: CGFloat = 10
-    static let hoverShadowYOffset: CGFloat = 12
-    static let activeShadowYOffset: CGFloat = 14
+    static let defaultShadowYOffset: CGFloat = 8
+    static let hoverShadowYOffset: CGFloat = 10
+    static let activeShadowYOffset: CGFloat = 15
     static let dragShadowYOffset: CGFloat = 18
     static let contentEdgeShadowOpacity: Double = 0.17
     static let contentEdgeHighlightOpacity: Double = 0.05
@@ -64,7 +64,7 @@ struct FloatingPanelBadge: View {
         }
         .padding(.horizontal, PremiumPanelStyle.badgeHorizontalPadding)
         .padding(.vertical, PremiumPanelStyle.badgeVerticalPadding)
-        .background(Color.black.opacity(PremiumPanelStyle.badgeFillOpacity))
+        .background(PremiumPanelStyle.panelSurfaceColor.opacity(PremiumPanelStyle.badgeFillOpacity))
         .clipShape(Capsule())
         .overlay {
             Capsule()
@@ -81,9 +81,9 @@ struct FloatingPanelIconButton: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: PremiumPanelStyle.iconButtonFontSize, weight: .bold))
-                .foregroundStyle(.white.opacity(0.92))
+                .foregroundStyle(.white.opacity(0.86))
                 .frame(width: PremiumPanelStyle.iconButtonSize, height: PremiumPanelStyle.iconButtonSize)
-                .background(Color.black.opacity(PremiumPanelStyle.iconButtonFillOpacity))
+                .background(PremiumPanelStyle.panelSurfaceColor.opacity(PremiumPanelStyle.iconButtonFillOpacity))
                 .clipShape(Circle())
                 .overlay {
                     Circle()
@@ -144,7 +144,7 @@ struct FloatingPanelChromeContainer<Content: View>: View {
             content
         }
         .padding(PremiumPanelStyle.floatingChromePadding)
-        .background(Color.black.opacity(PremiumPanelStyle.chromeFillOpacity))
+        .background(PremiumPanelStyle.panelSurfaceColor.opacity(PremiumPanelStyle.chromeFillOpacity))
         .clipShape(Capsule())
         .overlay {
             Capsule()
@@ -310,7 +310,8 @@ struct MinimalPanelHeader<Leading: View, Center: View>: View {
     @ViewBuilder let leading: Leading
     @ViewBuilder let center: Center
     @Binding var isDragging: Bool
-    let visible: Bool
+    let isActive: Bool
+    let isHovered: Bool
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -337,8 +338,22 @@ struct MinimalPanelHeader<Leading: View, Center: View>: View {
             .padding(.horizontal, PremiumPanelStyle.headerHorizontalPadding)
             .padding(.top, PremiumPanelStyle.headerTopPadding)
         }
-        .opacity(visible ? 1 : 0)
-        .animation(.easeOut(duration: PremiumPanelStyle.hoverAnimationDuration), value: visible)
+        .opacity(chromeOpacity)
+        .scaleEffect(chromeScale, anchor: .top)
+        .animation(.easeOut(duration: PremiumPanelStyle.hoverAnimationDuration), value: chromeOpacity)
+        .animation(.easeOut(duration: PremiumPanelStyle.hoverAnimationDuration), value: chromeScale)
+    }
+
+    private var chromeOpacity: Double {
+        if isHovered { return 1 }
+        if isActive { return 0.68 }
+        return 0
+    }
+
+    private var chromeScale: CGFloat {
+        if isHovered { return 1 }
+        if isActive { return 0.985 }
+        return 0.96
     }
 }
 
@@ -402,13 +417,13 @@ struct PremiumPanelChromeModifier: ViewModifier {
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: isActive ? 0.9 : 0.75
+                        lineWidth: isActive ? 0.95 : (isHovered ? 0.68 : 0.58)
                     )
                     .padding(PremiumPanelStyle.contentInset)
             }
             .overlay {
                 shape
-                    .stroke(Color.white.opacity(isActive ? 0.034 : 0.018), lineWidth: 0.55)
+                    .stroke(Color.white.opacity(isActive ? 0.032 : (isHovered ? 0.018 : 0.010)), lineWidth: 0.5)
                     .padding(PremiumPanelStyle.contentInset)
             }
             .shadow(
@@ -428,14 +443,14 @@ struct PremiumPanelChromeModifier: ViewModifier {
         }
 
         if isActive {
-            return Color.white.opacity(0.12)
+            return Color.white.opacity(0.15)
         }
 
         if isHovered {
-            return Color.white.opacity(0.075)
+            return Color.white.opacity(0.06)
         }
 
-        return Color.white.opacity(0.045)
+        return Color.white.opacity(0.026)
     }
 
     private var borderTrailColor: Color {
@@ -444,14 +459,14 @@ struct PremiumPanelChromeModifier: ViewModifier {
         }
 
         if isActive {
-            return Color.white.opacity(0.05)
+            return Color.white.opacity(0.062)
         }
 
         if isHovered {
-            return Color.white.opacity(0.035)
+            return Color.white.opacity(0.026)
         }
 
-        return Color.white.opacity(0.015)
+        return Color.white.opacity(0.008)
     }
 
     private var shadowOpacity: Double {
@@ -478,9 +493,13 @@ struct PremiumPanelChromeModifier: ViewModifier {
 
 struct PanelContentIntegrationModifier: ViewModifier {
     let fillColor: Color?
+    let cornerSofteningOpacity: Double
+    let cornerRadius: CGFloat
+    let edgeShadowOpacity: Double
+    let edgeHighlightOpacity: Double
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: PremiumPanelStyle.contentCornerRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
         content
             .clipShape(shape)
@@ -495,17 +514,59 @@ struct PanelContentIntegrationModifier: ViewModifier {
             }
             .overlay {
                 shape
-                    .stroke(Color.black.opacity(PremiumPanelStyle.contentEdgeShadowOpacity), lineWidth: 5.5)
+                    .stroke(Color.black.opacity(edgeShadowOpacity), lineWidth: 5.5)
                     .blur(radius: 4.5)
                     .mask(shape)
             }
             .overlay {
                 shape
-                    .stroke(Color.white.opacity(PremiumPanelStyle.contentEdgeHighlightOpacity), lineWidth: 1.4)
+                    .stroke(Color.white.opacity(edgeHighlightOpacity), lineWidth: 1.4)
                     .blur(radius: 1.2)
                     .mask(shape)
                     .opacity(0.72)
             }
+            .overlay {
+                if cornerSofteningOpacity > 0 {
+                    PanelCornerBlendOverlay(
+                        tint: fillColor ?? PremiumPanelStyle.contentBedColor,
+                        opacity: cornerSofteningOpacity
+                    )
+                    .clipShape(shape)
+                }
+            }
+    }
+}
+
+private struct PanelCornerBlendOverlay: View {
+    let tint: Color
+    let opacity: Double
+
+    var body: some View {
+        GeometryReader { geometry in
+            let blendRadius = max(34, min(geometry.size.width, geometry.size.height) * 0.16)
+
+            ZStack {
+                cornerGradient(center: .topLeading, endRadius: blendRadius)
+                cornerGradient(center: .topTrailing, endRadius: blendRadius)
+                cornerGradient(center: .bottomLeading, endRadius: blendRadius)
+                cornerGradient(center: .bottomTrailing, endRadius: blendRadius)
+            }
+            .opacity(opacity)
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func cornerGradient(center: UnitPoint, endRadius: CGFloat) -> some View {
+        RadialGradient(
+            colors: [
+                tint.opacity(0.92),
+                tint.opacity(0.46),
+                tint.opacity(0.0)
+            ],
+            center: center,
+            startRadius: 0,
+            endRadius: endRadius
+        )
     }
 }
 
@@ -514,7 +575,21 @@ extension View {
         modifier(PremiumPanelChromeModifier(isActive: isActive, isHovered: isHovered, isDragging: isDragging, usesFilledSurface: usesFilledSurface))
     }
 
-    func integratedPanelContent(fillColor: Color? = PremiumPanelStyle.contentBedColor) -> some View {
-        modifier(PanelContentIntegrationModifier(fillColor: fillColor))
+    func integratedPanelContent(
+        fillColor: Color? = PremiumPanelStyle.contentBedColor,
+        cornerSofteningOpacity: Double = 0,
+        cornerRadius: CGFloat = PremiumPanelStyle.contentCornerRadius,
+        edgeShadowOpacity: Double = PremiumPanelStyle.contentEdgeShadowOpacity,
+        edgeHighlightOpacity: Double = PremiumPanelStyle.contentEdgeHighlightOpacity
+    ) -> some View {
+        modifier(
+            PanelContentIntegrationModifier(
+                fillColor: fillColor,
+                cornerSofteningOpacity: cornerSofteningOpacity,
+                cornerRadius: cornerRadius,
+                edgeShadowOpacity: edgeShadowOpacity,
+                edgeHighlightOpacity: edgeHighlightOpacity
+            )
+        )
     }
 }
